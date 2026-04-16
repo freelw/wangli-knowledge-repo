@@ -51,13 +51,35 @@ make push
 
 当前 reconciler 在 manifests 里是独立 Deployment，因此如果修改了它的代码，也需要单独构建并同步镜像。
 
+构建入口：
+
+```bash
+cd /home/lexmount/project/backend/demo-nodejs-backend/browser-manager-reconciler
+make push
+```
+
 镜像字段见后文 `browser-manager-reconciler-image`。
 
 ### 1.3 `browser-ws-gateway`
 
 当前 websocket relay 已经是独立服务，因此如果修改了 `browser-ws-gateway` 代码，也需要单独构建并同步镜像。
 
+构建入口：
+
+```bash
+cd /home/lexmount/project/backend/demo-nodejs-backend/browser-ws-gateway
+make push
+```
+
 镜像字段见后文 `browser-ws-gateway-image`。
+
+### 1.4 服务入口速查表
+
+| 服务 | 代码目录 | 镜像键 | Deployment |
+| --- | --- | --- | --- |
+| `browser-manager` | `demo-nodejs-backend/browser-manager` | `browser-manager-image` | `browser-manager` |
+| `browser-manager-reconciler` | `demo-nodejs-backend/browser-manager-reconciler` | `browser-manager-reconciler-image` | `browser-manager-reconciler` |
+| `browser-ws-gateway` | `demo-nodejs-backend/browser-ws-gateway` | `browser-ws-gateway-image` | `browser-ws-gateway` |
 
 ## 第二步：更新 office 环境镜像
 

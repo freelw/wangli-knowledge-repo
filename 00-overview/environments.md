@@ -131,6 +131,7 @@ POCKETBASE_URL=<pocketbase-base-url>
 1. 值从 manifests 来
 2. 不要把它们当成前端仓库里的固定常量
 3. 如果页面联调异常，要先确认环境里实际注入的值
+4. `BROWSER_BASE_URL` 当前指向的是 `browser-manager` 控制面 Service，而不是前端直连 Chrome 实例
 
 ### 1. 发布 office 环境
 

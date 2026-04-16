@@ -204,6 +204,10 @@ kubectl rollout status deployment/lex-home -n frontend
 3. `lex-home-image` 已切到目标镜像
 4. 页面可访问
 5. 页面触发的关键动作能正确命中后端控制面
+6. `/settings/api-keys` 可创建 / 列出 API key
+7. `/settings/sessions` 列表能加载，创建 session 后可见新记录
+8. `/settings/contexts` 列表和创建动作可用
+9. `/settings/extensions` 列表可加载，上传入口可用
 
 ## 常见问题
 

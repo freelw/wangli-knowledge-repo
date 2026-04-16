@@ -44,6 +44,17 @@
 2. `BROWSER_BASE_URL`
 3. `POCKETBASE_URL`
 
+同时需要区分两类变量：
+
+1. `KONG_ADMIN_BASE_URL`、`BROWSER_BASE_URL`、`POCKETBASE_URL` 这类服务端运行时依赖
+2. `NEXT_PUBLIC_*` 这类前端可见配置
+
+对前端来说，这两类变量不能混为一谈：
+
+1. 服务端运行时依赖更偏联调与后端链路
+2. `NEXT_PUBLIC_*` 更直接影响页面行为、开关和展示
+3. 如果页面行为没变，也要考虑是不是前端镜像或前端配置没有真正更新
+
 ## 部署与镜像
 
 ### 命名空间与对象
@@ -94,6 +105,47 @@
 3. `browser-ws-gateway` websocket 链路
 4. `lexmount-k8s-manifests` 环境配置
 
+## 页面入口到后端动作的常见映射
+
+下面这张表只覆盖最常用的几组入口，目的是让新人第一次接活时不用先把整份 `src/actions/kong.ts` 倒推一遍。
+
+| 页面入口 | 常见 server action | 主要后端落点 |
+| --- | --- | --- |
+| `/settings/api-keys` | `upsertConsumer`、`listApiKeys`、`createApiKey`、`deleteApiKey` | Kong Admin `consumers` / `key-auth` |
+| `/settings/sessions` | `getSessions`、`createSession`、`stopSession`、`deleteSession` | `POST /instance/v2/sessions`、`POST /instance`、`POST /instance/stop`、`DELETE /instance` |
+| `/settings/contexts` | `listContexts`、`createContext`、`deleteContext`、`forceReleaseContext` | `browser-manager` 的 context 相关接口 |
+| `/settings/extensions` | `listExtensions`、`getExtension`、`deleteExtension`、上传走 `/api/extensions/upload` | `browser-manager` 的 extension 相关接口 |
+
+## 当前最常见的后端调用路径
+
+如果从后端联调视角只记最常用的几条，可以先记这些：
+
+1. `POST ${BROWSER_BASE_URL}/instance/v2/sessions`
+2. `POST ${BROWSER_BASE_URL}/instance`
+3. `POST ${BROWSER_BASE_URL}/instance/stop`
+4. `DELETE ${BROWSER_BASE_URL}/instance`
+5. Kong Admin 的 `consumers` / `key-auth`
+6. PocketBase 相关调用
+
+这里需要特别注意：
+
+1. `BROWSER_BASE_URL` 当前指向的是 `browser-manager` 控制面 Service
+2. 虽然端口是 `9222`，但这里不是前端直连浏览器实例或直接连 Chrome DevTools
+3. 真正 websocket / DevTools 链路仍由 `browser-ws-gateway` 承载
+
+## 前端第一次排查建议阅读顺序
+
+如果是第一次接 `lex-home` 相关问题，建议先按下面顺序：
+
+1. 页面组件，例如：
+   - `src/components/settings/api-keys/api-keys-card.tsx`
+   - `src/components/settings/sessions/sessions-page.tsx`
+   - `src/components/settings/contexts/contexts-page.tsx`
+   - `src/components/settings/extensions/extensions-page.tsx`
+2. `lex-home/src/actions/kong.ts`
+3. `lexmount-k8s-manifests/apps/lex-home/lex-home-configmap.yaml`
+4. `browser-manager` 对应控制面接口
+
 ## office 环境最小验证
 
 如果当前只做 `office` 联调，建议最少确认：
@@ -102,6 +154,10 @@
 2. `lex-home-image` 已切到目标镜像
 3. `lex-home` 页面能打开
 4. 页面触发的关键联调动作能命中后端
+5. `/settings/api-keys` 可创建 / 列出 API key
+6. `/settings/sessions` 会话列表可加载，创建 session 后能看到新记录
+7. `/settings/contexts` 列表和创建动作可用
+8. `/settings/extensions` 列表可加载，上传走 `/api/extensions/upload`
 
 ## 当前结论
 
