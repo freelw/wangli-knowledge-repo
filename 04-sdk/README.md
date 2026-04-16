@@ -5,7 +5,8 @@
 当前建议阅读顺序：
 
 1. `agent-access-landscape.md`
-2. `opencli-integration-assessment.md`
+2. `external-doc-mapping.md`
+3. `opencli-integration-assessment.md`
 
 ## 当前已有文档
 
@@ -25,6 +26,14 @@
 1. `jackwener/opencli` 和 Lexmount 的接点在哪里
 2. 为什么当前只能写成“接入评估”
 3. 下一步应优先验证什么
+
+### `external-doc-mapping.md`
+
+回答：
+
+1. 哪些内容属于内部知识库
+2. 哪些内容已有 `lex-home` 对外文档
+3. 哪些说法必须写成“禁止对外承诺”
 
 ## 建议后续补充
 
