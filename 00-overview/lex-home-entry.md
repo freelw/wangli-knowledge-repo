@@ -107,14 +107,20 @@
 
 ## 页面入口到后端动作的常见映射
 
-下面这张表只覆盖最常用的几组入口，目的是让新人第一次接活时不用先把整份 `src/actions/kong.ts` 倒推一遍。
+下面这张表覆盖当前最常用的四条页面链路，目的是让新人第一次接活时不用先把整份 `src/actions/kong.ts` 倒推一遍。
 
-| 页面入口 | 常见 server action | 主要后端落点 |
-| --- | --- | --- |
-| `/settings/api-keys` | `upsertConsumer`、`listApiKeys`、`createApiKey`、`deleteApiKey` | Kong Admin `consumers` / `key-auth` |
-| `/settings/sessions` | `getSessions`、`createSession`、`stopSession`、`deleteSession` | `POST /instance/v2/sessions`、`POST /instance`、`POST /instance/stop`、`DELETE /instance` |
-| `/settings/contexts` | `listContexts`、`createContext`、`deleteContext`、`forceReleaseContext` | `browser-manager` 的 context 相关接口 |
-| `/settings/extensions` | `listExtensions`、`getExtension`、`deleteExtension`、上传走 `/api/extensions/upload` | `browser-manager` 的 extension 相关接口 |
+| 页面路由 | 关键页面 / 组件 | 主要 server action / API route | 最终后端接口落点 | 说明 |
+| --- | --- | --- | --- | --- |
+| `/settings/api-keys` | `src/components/settings/api-keys/api-keys-card.tsx` | `upsertConsumer` / `listApiKeys` / `createApiKey` / `deleteApiKey` | Kong Admin API：`/consumers/{id}`、`/consumers/{id}/key-auth` | 这是前端拿到可用 API key 的起点；后面的 sessions / contexts / extensions 都依赖这里先有 key |
+| `/settings/sessions` | `src/components/settings/sessions/sessions-page.tsx`、`sessions-card.tsx` | `getSessions` / `createSession` / `stopSession` / `deleteSession` / `getSessionTimeout` / `setSessionTimeout` / `listContexts` / `listExtensions` / `createContext` | `BROWSER_BASE_URL` 下的 `POST /instance/v2/sessions`、`POST /instance`、`POST /instance/stop`、`DELETE /instance`，以及 contexts / extensions 相关接口 | 这是控制台联调最复杂的一页，既会查 sessions，也会在创建 session 前联动 contexts 和 extensions |
+| `/settings/contexts` | `src/components/settings/contexts/contexts-page.tsx`、`contexts-card.tsx` | `upsertConsumer` / `listApiKeys` / `listContexts` / `createContext` / `deleteContext` / `forceReleaseContext` | `BROWSER_BASE_URL` 下的 contexts 相关接口：`/instance/v1/contexts/create-context`、`/list-contexts`、`/{contextId}`、`/{contextId}/force-release` | 页面先拿默认 API key，再对 context 做增删和强制释放 |
+| `/settings/extensions` | `src/components/settings/extensions/extensions-page.tsx`、`extensions-card.tsx` | `upsertConsumer` / `listApiKeys` / `listExtensions` / `getExtension` / `deleteExtension` / `/api/extensions/upload` | `BROWSER_BASE_URL` 下的 extension 相关接口：`/instance/v1/extension/list`、`/info`、`/{extensionId}`、`/upload` | 上传不是组件直接打 `browser-manager`，而是先走 Next.js route `/api/extensions/upload`，再由 route 调 `uploadExtensionOctetStream` |
+
+补充理解：
+
+1. 这些页面共同的起点是先通过 `upsertConsumer` + `listApiKeys` 拿到 consumer 与 API key
+2. 真正的平台控制面调用主要集中在 `lex-home/src/actions/kong.ts`
+3. 如果只是页面状态异常，先看对应 page / card 组件；如果是联调异常，再往 `src/actions/kong.ts`、`BROWSER_BASE_URL` 和 `browser-manager` 继续排
 
 ## 当前最常见的后端调用路径
 

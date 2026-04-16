@@ -209,6 +209,64 @@ kubectl rollout status deployment/lex-home -n frontend
 8. `/settings/contexts` 列表和创建动作可用
 9. `/settings/extensions` 列表可加载，上传入口可用
 
+### `lex-home` 页面级 smoke test（office）
+
+#### 1. API Keys 页面
+
+路由：`/settings/api-keys`
+
+检查项：
+
+1. 页面能正常打开，不出现初始化报错
+2. 能自动完成 `upsertConsumer` 并列出已有 API key
+3. 点击创建后能生成新的 key
+4. 新 key 能复制
+5. 删除 key 后列表会刷新
+
+#### 2. Sessions 页面
+
+路由：`/settings/sessions`
+
+检查项：
+
+1. 页面能正常加载已有 sessions
+2. Active / Closed 列表能正常刷新与分页
+3. 能创建 session
+4. 创建 session 时，如选择 context / extension，不会报联调错误
+5. 创建成功后列表出现新 session
+6. Stop session / Delete session 动作可执行
+7. session timeout 的读取与保存可执行
+
+#### 3. Contexts 页面
+
+路由：`/settings/contexts`
+
+检查项：
+
+1. 页面能正常加载 context 列表
+2. 能创建 context
+3. locked context 可执行 force release
+4. 删除 context 后列表刷新正常
+
+#### 4. Extensions 页面
+
+路由：`/settings/extensions`
+
+检查项：
+
+1. 页面能正常加载 extension 列表
+2. 能查看 extension 详情
+3. 删除 extension 后列表刷新正常
+4. 上传 zip / crx 文件时，请求会命中 `/api/extensions/upload`
+5. 上传成功后列表出现新 extension
+
+#### 5. 联调异常时的最短排查顺序
+
+1. 先确认页面路由和组件本身是否正常渲染
+2. 再看 `lex-home/src/actions/kong.ts` 是否命中了预期 action
+3. 再确认 `KONG_ADMIN_BASE_URL` / `BROWSER_BASE_URL` / `POCKETBASE_URL` 是否和环境一致
+4. 最后再看 `browser-manager` / Kong Admin / PocketBase 是否可用
+
 ## 常见问题
 
 ### 1. `kubectl apply -k .` 成功，但服务没变化
