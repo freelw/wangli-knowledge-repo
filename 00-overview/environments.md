@@ -2,7 +2,7 @@
 
 ## 目的
 
-这篇文档用于统一记录当前后端平台的环境信息、访问方式和常用环境变量。
+这篇文档用于统一记录当前平台环境信息、访问方式和常用环境变量。
 
 ## 当前已知环境
 
@@ -37,13 +37,19 @@ https://apitest.local.lexmount.net
 https://apitest.local.lexmount.net/instance
 ```
 
-### 本地调用环境变量
+### 平台调用环境变量口径
 
 ```bash
-LEXMOUNT_API_KEY=SABG5D4NStyRFeFLLRNSEeyUIRABeLm5
-LEXMOUNT_PROJECT_ID=11872275-f529-4b63-bbce-eba62c4257e1
+LEXMOUNT_API_KEY=<office-api-key>
+LEXMOUNT_PROJECT_ID=<office-project-id>
 LEXMOUNT_BASE_URL=https://apitest.local.lexmount.net
 ```
+
+说明：
+
+1. 这里不再记录真实 key / project_id
+2. 真实值应从对应环境的安全配置或负责人处获取
+3. 知识库只保留变量名、用途和获取方式
 
 ### 本机访问能力
 
@@ -62,16 +68,22 @@ LEXMOUNT_BASE_URL=https://apitest.local.lexmount.net
 
 `qcloud` 是腾讯云环境。
 
-### 本地调用环境变量
+### 平台调用环境变量口径
 
 ```bash
-LEXMOUNT_API_KEY=WSUNLQVYICXDUWjXcHxa7vZLMb20R0dd
-LEXMOUNT_PROJECT_ID=d5c3237b-8f94-40b2-89d1-8752a1997294
+LEXMOUNT_API_KEY=<qcloud-api-key>
+LEXMOUNT_PROJECT_ID=<qcloud-project-id>
 ```
 
 ### 说明
 
 在 `qcloud` 场景下，不需要设置 `LEXMOUNT_BASE_URL`。
+
+当前知识库还需要明确一个操作边界：
+
+1. 本机默认不要把 `qcloud` 当成“可直接 `kubectl apply -k`”的环境
+2. 当前机器上已经确认可直接 `kubectl` 的是 `office`
+3. `qcloud` / `qcloud-hk` 的实际发布应通过对应负责人或正确环境入口执行
 
 ## 其他环境
 
@@ -93,6 +105,32 @@ LEXMOUNT_PROJECT_ID=d5c3237b-8f94-40b2-89d1-8752a1997294
 从历史配置变更记录看，`guoge` 曾出现在集群配置同步范围内，但当前不是主要对外说明环境。
 
 ## 常用访问与检查方式
+
+### `lex-home` 前端联调相关环境变量
+
+`lex-home` 当前至少依赖这些关键变量：
+
+```bash
+KONG_ADMIN_BASE_URL=<kong-admin-base-url>
+BROWSER_BASE_URL=<browser-manager-base-url>
+POCKETBASE_URL=<pocketbase-base-url>
+```
+
+当前已知 `office` 集群内默认值可以在下面位置查看：
+
+1. `lexmount-k8s-manifests/apps/lex-home/lex-home-configmap.yaml`
+
+其中当前配置是：
+
+1. `KONG_ADMIN_BASE_URL="http://kong-admin.system.svc.cluster.local:8001/"`
+2. `BROWSER_BASE_URL="http://browser-manager.system.svc.cluster.local:9222/"`
+3. `POCKETBASE_URL="http://pocketbase-service.default.svc.cluster.local:8090"`
+
+对于前端联调，更重要的是记住：
+
+1. 值从 manifests 来
+2. 不要把它们当成前端仓库里的固定常量
+3. 如果页面联调异常，要先确认环境里实际注入的值
 
 ### 1. 发布 office 环境
 
@@ -127,6 +165,38 @@ kubectl get deployment browser-operator-controller-manager -n system -o jsonpath
 
 不适合用于直接修改云资源。
 
+## `lex-home` 环境补充
+
+### 仓库与部署入口
+
+前端控制台 / 官网相关的主要入口是：
+
+1. 代码仓库：`/home/lexmount/project/backend/lex-home`
+2. K8s 配置：`/home/lexmount/project/backend/lexmount-k8s-manifests/apps/lex-home`
+
+### 镜像回填字段
+
+各环境都通过 `images-configmap.yaml` 里的 `lex-home-image` 回填镜像。
+
+常见位置：
+
+1. `apps/clusters/office/images-configmap.yaml`
+2. `apps/clusters/qcloud/images-configmap.yaml`
+3. `apps/clusters/qcloud-hk/images-configmap.yaml`
+
+### 当前已知镜像仓库差异
+
+1. `office`：`code.lexmount.net/feixiang/lex-home`
+2. `qcloud`：`lexmount.tencentcloudcr.com/cloud/lex-home`
+3. `qcloud-hk`：`lexmoun-tcr-hk.tencentcloudcr.com/cloud/lex-home`
+
+### 常用脚本
+
+`lex-home` 相关镜像同步和回填脚本当前在：
+
+1. `apps/tools/set_lex_home_image_tags.sh`
+2. `apps/tools/sync_lex_home.sh`
+
 ## 环境使用建议
 
 ### 开发验证
@@ -153,4 +223,5 @@ kubectl get deployment browser-operator-controller-manager -n system -o jsonpath
 
 1. `office` 是主测试环境
 2. `qcloud` 是主腾讯云环境
-3. `office` 的访问与发布路径最清晰，应作为多数开发验证的默认环境
+3. 当前机器默认可直接 `kubectl` 的是 `office`
+4. `office` 的访问与发布路径最清晰，应作为多数开发验证的默认环境

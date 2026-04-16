@@ -15,9 +15,23 @@
 
 当前 websocket relay 逻辑主要位于：
 
-`demo-nodejs-backend/browser-manager/websocket.js`
+1. `demo-nodejs-backend/browser-ws-gateway/server.js`
+2. `demo-nodejs-backend/browser-ws-gateway/websocket.js`
+3. `demo-nodejs-backend/browser-ws-gateway/session-activity.js`
+4. `demo-nodejs-backend/browser-ws-gateway/cdp-tracking.js`
 
-这也是当前架构问题的关键位置，因为它和 HTTP 控制面还混在同一个服务里。
+这说明当前 relay 已经不再挂在 `browser-manager` 进程里，而是由独立的 `browser-ws-gateway` 承载。
+
+同时还需要结合：
+
+1. `demo-nodejs-backend/browser-manager/routes/proxy.js`
+2. `demo-nodejs-backend/browser-manager/config.js`
+
+原因是：
+
+1. `browser-manager` 仍负责 `/json`、`/json/version` 等 inspect 代理
+2. `browser-manager` 仍负责对外 websocket 地址改写
+3. `browser-ws-gateway` 负责真正的 websocket 长连接承载
 
 ## 当前核心流程
 
@@ -141,31 +155,39 @@ relay 层负责把底层变化隐藏起来。
 
 ## 当前架构的核心问题
 
-当前问题不是“副本不够”，而是“长连接承载面和高频变更代码在同一个发布单元里”。
+当前主要风险已经不再是“HTTP 控制面和 websocket relay 仍在同一个进程里”。
 
-当前 `browser-manager` 同时承载：
+更准确的现状是：
 
-1. HTTP API
-2. websocket relay
+1. `browser-manager` 负责 HTTP 控制面
+2. `browser-ws-gateway` 负责 websocket relay
+3. `browser-ws-gateway` 已经有独立的 `readyz` / draining / 优雅退出逻辑
 
-结果是：
+当前仍然存在的问题是：
 
-1. 发布 `browser-manager` 时，Pod 会滚动替换
-2. 已建立的 websocket 连接会随着旧 Pod 终止而断开
-3. 即使有多副本，也不会迁移现有连接
+1. `/connection` 仍在握手阶段承载一部分控制面逻辑
+2. `browser-ws-gateway` 仍直接复用 `browser-manager` 内部模块
+3. websocket 稳定性风险更应关注 `browser-ws-gateway` 自己发布 / draining 时的连接表现
 
-所以问题根因是：
+所以当前问题根因更准确地说是：
 
-1. 服务职责划分错误
-2. 发布单元拆分不合理
+1. 服务形态已经拆开
+2. 但 `/connection` 和共享模块边界还没有完全纯化
 
-而不是单纯的副本数问题。
+## 哪些说法已经过时
+
+下面这些说法不应再写成当前现状：
+
+1. “`browser-manager` 同时承载 HTTP API 和 websocket relay”
+2. “relay 主逻辑还在 `browser-manager/websocket.js`”
+
+这些只能作为历史背景，不应继续当作当前代码事实引用。
 
 ## 推荐拆分方向
 
-推荐至少拆成两个前台服务：
+推荐继续演进的方向仍然是把 relay 边界做得更纯：
 
-### 1. `browser-manager-api`
+### 1. HTTP 控制面继续收敛成更清晰的 `browser-manager-api` 形态
 
 负责：
 
@@ -180,7 +202,7 @@ relay 层负责把底层变化隐藏起来。
 2. 多副本
 3. 不承载长连接状态
 
-### 2. `browser-ws-gateway`
+### 2. `browser-ws-gateway` 继续收敛成更薄的 relay 层
 
 负责：
 
@@ -245,8 +267,9 @@ relay 层负责把底层变化隐藏起来。
 
 ## 当前结论
 
-如果只记住 relay 的核心价值，可以记住这三点：
+如果只记住 relay 的当前事实和价值，可以记住这四点：
 
 1. relay 负责隐藏底层 Chrome 实例细节
 2. relay 负责承载 websocket 长连接流量
-3. relay 不应该长期和高频变更的 HTTP 控制面混在一个服务里
+3. relay 当前已经由独立的 `browser-ws-gateway` 承载
+4. relay 后续还需要继续把 `/connection` 和共享模块边界纯化

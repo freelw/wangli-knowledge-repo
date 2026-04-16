@@ -44,6 +44,10 @@
 4. `browser-operator-controller-manager`
 5. `browser-operator-api`
 
+如果涉及前端 / 控制台联调，还需要补充关注：
+
+6. `frontend` namespace 下的 `lex-home`
+
 ## 最常用操作
 
 ### 1. 发布整个 office overlay
@@ -97,6 +101,12 @@ kubectl get deployment browser-ws-gateway -n system -o jsonpath='{.spec.template
 kubectl get deployment browser-operator-controller-manager -n system -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
 ```
 
+### `lex-home`
+
+```bash
+kubectl get deployment lex-home -n frontend -o jsonpath='{.spec.template.spec.containers[?(@.name=="lex-home")].image}{"\n"}'
+```
+
 ## rollout 检查
 
 ### `browser-manager`
@@ -121,6 +131,12 @@ kubectl rollout status deployment/browser-ws-gateway -n system
 
 ```bash
 kubectl rollout status deployment/browser-operator-controller-manager -n system
+```
+
+### `lex-home`
+
+```bash
+kubectl rollout status deployment/lex-home -n frontend
 ```
 
 ## 最小验证路径
@@ -175,6 +191,20 @@ kubectl rollout status deployment/browser-operator-controller-manager -n system
 2. rollout 是否完成
 3. 最小接口 / websocket / 实例链路是否都可用
 
+### 路径 5：前端 / 控制台联调验证
+
+目标：
+
+确认 `lex-home` 自己的发布和前端联调链路正常。
+
+最小检查项：
+
+1. `frontend` namespace 下 `lex-home` Pod 正常运行
+2. `lex-home` Deployment rollout 成功
+3. `lex-home-image` 已切到目标镜像
+4. 页面可访问
+5. 页面触发的关键动作能正确命中后端控制面
+
 ## 常见问题
 
 ### 1. `kubectl apply -k .` 成功，但服务没变化
@@ -201,6 +231,15 @@ kubectl rollout status deployment/browser-operator-controller-manager -n system
 2. `browser-operator-api` 是否正常
 3. `browser-operator-controller-manager` 是否正常
 4. office 环境的 operator 镜像和配置是否匹配
+
+### 4. 前端页面正常打开，但联调动作异常
+
+优先检查：
+
+1. `lex-home` 的环境变量是否已正确注入
+2. `lex-home` 当前镜像是不是预期版本
+3. `lex-home/src/actions/kong.ts` 依赖的 `KONG_ADMIN_BASE_URL`、`BROWSER_BASE_URL`、`POCKETBASE_URL` 是否和环境一致
+4. 后端对应接口是否真的可用
 
 ## 当前结论
 

@@ -4,7 +4,7 @@
 
 这篇文档用于回答两个问题：
 
-1. 后端平台当前有哪些核心仓库
+1. 浏览器云平台当前有哪些核心仓库
 2. 遇到问题时应该优先去哪个仓库看
 
 ## 核心主链路仓库
@@ -22,6 +22,10 @@
 2. websocket relay 承载面
 3. 浏览器实例编排层
 4. 环境部署配置层
+
+除此之外，还有一个不在前台请求主链路里、但经常影响 session 补偿与清理的后台服务：
+
+1. `demo-nodejs-backend/browser-manager-reconciler`
 
 ### `demo-nodejs-backend/browser-manager`
 
@@ -88,6 +92,21 @@
 3. 镜像 tag 没有同步
 4. 环境变量、configmap、kustomization 配置问题
 
+### `demo-nodejs-backend/browser-manager-reconciler`
+
+职责：
+
+1. 负责 creating session 补偿
+2. 负责 active session cleanup
+3. 负责 downloads cleanup
+4. 负责 closed history cleanup
+
+适合优先查看的场景：
+
+1. session 卡在 creating / active 等异常状态
+2. 关闭后的 session、downloads、history 没有按预期清理
+3. 明明前台请求已结束，但后台状态迟迟不收口
+
 ## relay 链路在仓库里的位置
 
 如果要专门理解 relay 链路，当前最相关的仓库位置是：
@@ -116,6 +135,29 @@
 ## SDK 与示例仓库
 
 这层仓库主要负责“客户端接入”和“快速验证”。
+
+### `lex-home`
+
+职责：
+
+1. 作为平台官网 / 控制台前端入口
+2. 承接前端页面操作到后端平台 API 的联调
+3. 通过 server actions 调用 Kong Admin、PocketBase、`browser-manager` 等后端能力
+
+仓库与部署入口：
+
+1. 仓库：`/home/lexmount/project/backend/lex-home`
+2. manifests：`lexmount-k8s-manifests/apps/lex-home`
+3. 环境镜像键：`lexmount-k8s-manifests/apps/clusters/*/images-configmap.yaml` 中的 `lex-home-image`
+4. 常用同步脚本：
+   - `lexmount-k8s-manifests/apps/tools/set_lex_home_image_tags.sh`
+   - `lexmount-k8s-manifests/apps/tools/sync_lex_home.sh`
+
+适合优先查看的场景：
+
+1. 前端页面联调不知道实际打到哪一层后端
+2. `lex-home` 发布后页面行为与预期不一致
+3. 前端怀疑是镜像、环境变量或环境差异而不是页面代码问题
 
 ### Python 侧
 
@@ -197,6 +239,14 @@
 1. `browser-skill`
 2. `browser-manager`
 3. 对应 SDK / quickstart
+
+### 场景 6：前端页面或控制台联调异常
+
+优先顺序：
+
+1. `lex-home`
+2. `browser-manager`
+3. `lexmount-k8s-manifests`
 
 ## 当前结论
 

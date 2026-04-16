@@ -6,16 +6,19 @@
 
 ## 当前核心发布对象
 
-当前最常见的发布对象主要有两类：
+当前最常见的发布对象主要有四类：
 
 1. `browser-manager`
-2. `browser-operator`（来自 `k8s-chrome-daemon`）
+2. `browser-ws-gateway`
+3. `browser-operator`（来自 `k8s-chrome-daemon`）
+4. `browser-manager-reconciler`
 
 对应涉及的核心仓库是：
 
 1. `demo-nodejs-backend/browser-manager`
-2. `k8s-chrome-daemon`
-3. `lexmount-k8s-manifests`
+2. `demo-nodejs-backend/browser-ws-gateway`
+3. `k8s-chrome-daemon`
+4. `lexmount-k8s-manifests`
 
 可以把它们理解成：
 
@@ -69,6 +72,23 @@ wangli_dev_20260413_1
 1. 代码修改是否已经完成
 2. 镜像是否构建并推送成功
 3. `lexmount-k8s-manifests` 中对应环境的镜像配置是否已更新
+
+### `browser-ws-gateway`
+
+需要关注：
+
+1. websocket / relay 相关代码是否已经完成
+2. `browser-ws-gateway` 镜像是否构建并推送成功
+3. `lexmount-k8s-manifests` 中对应环境的 `browser-ws-gateway-image` 是否已更新
+4. 发布后是否单独检查 ws gateway 的 rollout、`readyz` 和 draining 表现
+
+### `browser-manager-reconciler`
+
+需要关注：
+
+1. 后台补偿 / 清理逻辑是否已经完成
+2. `browser-manager-reconciler` 镜像是否构建并推送成功
+3. `lexmount-k8s-manifests` 中对应环境的 `browser-manager-reconciler-image` 是否已更新
 
 ### `k8s-chrome-daemon`
 
@@ -154,16 +174,17 @@ wangli_dev_20260413_1
 例如：
 
 1. `browser-manager` 的接口可调用
-2. `browser-operator` 能成功创建实例
-3. 相关 session / context / 下载链路可用
+2. `browser-ws-gateway` 的 websocket / relay 链路可用
+3. `browser-operator` 能成功创建实例
+4. 相关 session / context / 下载链路可用
 
 ## 推荐阅读顺序
 
 如果要继续深入发布细节，建议按下面顺序读：
 
 1. `00-overview/environments.md`
-2. `02-operations/release-browser-operator.md`
-3. 后续补充的 `02-operations/release-browser-manager.md`
+2. `02-operations/release-browser-manager.md`
+3. `02-operations/release-browser-operator.md`
 
 ## 当前结论
 

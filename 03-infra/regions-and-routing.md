@@ -98,6 +98,16 @@
 
 所以跨环境问题里，先确认“是不是同一份镜像”比先怀疑代码更重要。
 
+### 3. `lex-home` 前端入口差异
+
+`lex-home` 在不同环境里同样存在镜像和入口差异：
+
+1. `office` 使用 `code.lexmount.net/feixiang/lex-home`
+2. `qcloud` 使用 `lexmount.tencentcloudcr.com/cloud/lex-home`
+3. `qcloud-hk` 使用 `lexmoun-tcr-hk.tencentcloudcr.com/cloud/lex-home`
+
+所以前端如果遇到“页面行为和代码理解不一致”，也要优先确认是不是环境镜像没有同步，而不是只怀疑页面代码。
+
 ### 3. 网络差异
 
 `qcloud` 和 `qcloud-hk` 经常需要额外确认：
@@ -135,6 +145,26 @@
 1. `demo-nodejs-backend/kong-init/config-*.js`
 2. `lexmount-k8s-manifests/apps/kong/*`
 3. `03-infra/tencent-network-topology.md`
+
+### 场景 4：前端页面能打开，但不同环境联调行为不同
+
+优先看：
+
+1. `lexmount-k8s-manifests/apps/clusters/*/images-configmap.yaml` 中的 `lex-home-image`
+2. `lexmount-k8s-manifests/apps/lex-home/lex-home-configmap.yaml`
+3. `apps/tools/set_lex_home_image_tags.sh`
+4. `apps/tools/sync_lex_home.sh`
+
+这类问题经常不是页面代码本身不同，而是前端镜像、环境变量或区域镜像同步不一致。
+
+## `lex-home` 的环境入口
+
+如果是从前端 / 控制台视角理解环境，可以先记住：
+
+1. 代码仓库在 `/home/lexmount/project/backend/lex-home`
+2. 部署入口在 `lexmount-k8s-manifests/apps/lex-home`
+3. 环境镜像回填看 `lex-home-image`
+4. 不同环境的 registry 前缀不同
 
 ## 当前结论
 

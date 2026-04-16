@@ -2,12 +2,13 @@
 
 ## 目的
 
-这篇文档从整体视角说明当前浏览器云平台后端的主链路结构，帮助新加入的人先回答这几个问题：
+这篇文档从整体视角说明当前浏览器云平台主链路结构，帮助新加入的人先回答这几个问题：
 
 1. 整个系统由哪些核心服务组成
 2. 请求是怎么从控制面走到浏览器实例的
 3. 哪些服务负责 HTTP，哪些服务负责 websocket，哪些服务负责后台补偿
 4. 环境配置和发布落在哪一层
+5. `lex-home` 这样的前端入口在整张图上处于什么位置
 
 ## 当前主链路
 
@@ -83,9 +84,17 @@ office / qcloud / qcloud-hk / aws / guoge
 2. Node SDK
 3. quickstart 示例
 4. browser-skill
-5. 其他 agent / 工具接入
+5. `lex-home`
+6. 其他 agent / 工具接入
 
 它们负责消费平台能力，而不是管理浏览器生命周期本身。
+
+其中 `lex-home` 的位置需要单独说明：
+
+1. 它是浏览器平台的前端入口 / 控制台
+2. 前端交互最终仍会落到 `browser-manager`、Kong Admin、PocketBase 等后端能力
+3. 对前端接活的人来说，它不是独立于平台外的一层，而是“调用平台控制面能力的上游入口”
+4. 关键代码入口是 `lex-home/src/actions/kong.ts`
 
 ## 2. `browser-manager`
 
@@ -202,16 +211,27 @@ session 的创建、激活、使用、关闭和清理，不是在单个服务里
 2. 本机可以直接 `kubectl` 连接 `office`
 3. 大多数开发、测试、发布验证都先落 `office`
 
+## 前端联调视角
+
+如果从 `lex-home` 视角理解这套系统，可以先记住：
+
+1. 页面入口在 `lex-home`
+2. `lex-home` 的 server actions 会调用平台 API / Kong Admin / PocketBase
+3. 浏览器控制面在 `browser-manager`
+4. websocket 长连接在 `browser-ws-gateway`
+5. 部署和环境配置最终落在 `lexmount-k8s-manifests`
+
 ## 推荐阅读顺序
 
 如果看完这篇还要继续补上下文，建议按下面顺序读：
 
 1. `00-overview/repository-map.md`
-2. `00-overview/environments.md`
-3. `01-architecture/browser-manager-overview.md`
-4. `01-architecture/websocket-relay.md`
-5. `01-architecture/browser-manager-split-plan.md`
-6. `01-architecture/session-lifecycle.md`
+2. `00-overview/lex-home-entry.md`
+3. `00-overview/environments.md`
+4. `01-architecture/browser-manager-overview.md`
+5. `01-architecture/websocket-relay.md`
+6. `01-architecture/browser-manager-split-plan.md`
+7. `01-architecture/session-lifecycle.md`
 
 ## 当前结论
 
