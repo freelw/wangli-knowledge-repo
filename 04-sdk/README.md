@@ -7,6 +7,7 @@
 1. `agent-access-landscape.md`
 2. `external-doc-mapping.md`
 3. `opencli-integration-assessment.md`
+4. `session-targets-and-inspect-url.md`
 
 ## 当前已有文档
 
@@ -34,6 +35,15 @@
 1. 哪些内容属于内部知识库
 2. 哪些内容已有 `lex-home` 对外文档
 3. 哪些说法必须写成“禁止对外承诺”
+
+### `session-targets-and-inspect-url.md`
+
+回答：
+
+1. session 本体与 target 级数据的边界怎么划分
+2. `/json` 与 `/json/version` 在这次任务里分别承担什么职责
+3. JS / Python SDK 如何暴露 session targets
+4. browser-manager 变更后为什么还要同步 `office` / `qcloud` / `qcloud-hk` 三边 tag
 
 ## 建议后续补充
 
