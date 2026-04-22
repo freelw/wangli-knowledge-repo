@@ -11,3 +11,4 @@
 已归档任务：
 
 - [2026-04-17 sdk-session-字段增加](./2026-04-17-sdk-session-fields.md)
+- [2026-04-22 setaria 数据采集](./2026/2026-04-22-setaria-metrics.md)
