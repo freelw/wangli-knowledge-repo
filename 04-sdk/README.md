@@ -8,6 +8,7 @@
 2. `external-doc-mapping.md`
 3. `opencli-integration-assessment.md`
 4. `session-targets-and-inspect-url.md`
+5. `sdk-nearest-access-design.md`
 
 ## 当前已有文档
 
@@ -45,6 +46,16 @@
 3. JS / Python SDK 如何暴露 session targets
 4. browser-manager 变更后为什么还要同步 `office` / `qcloud` / `qcloud-hk` 三边 tag
 
+### `sdk-nearest-access-design.md`
+
+回答：
+
+1. SDK 就近接入到底在选什么，哪些层不应该暴露给 SDK
+2. 为什么正式默认路径只能消费 `scope=public`
+3. `region / endpoint / catalog` 三层模型应该怎么划分
+4. 为什么对外 `region` 不应该直接用 `qcloud / office / qcloud-hk`
+5. 第一版自动选路为什么固定为 `catalog -> filter -> probe -> select`
+
 ## 建议后续补充
 
 后续如果继续补这一层，优先顺序建议是：
@@ -52,12 +63,14 @@
 1. `codex-browser-skill-access.md`
 2. `sdk-landscape.md`
 3. `quickstart-alignment.md`
+4. `sdk-nearest-access-implementation.md`
 
 其中：
 
 1. `codex-browser-skill-access.md` 更偏“Codex / browser-skill 当前稳定入口”
 2. `sdk-landscape.md` 更偏 Python / JS SDK 的能力对齐
 3. `quickstart-alignment.md` 更偏示例仓库覆盖情况
+4. `sdk-nearest-access-implementation.md` 更偏正式落地时的 SDK 参数、缓存、fallback 与日志实现细节
 
 ## 当前结论
 

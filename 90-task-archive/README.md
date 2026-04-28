@@ -12,3 +12,5 @@
 
 - [2026-04-17 sdk-session-字段增加](./2026-04-17-sdk-session-fields.md)
 - [2026-04-22 setaria 数据采集](./2026/2026-04-22-setaria-metrics.md)
+- [2026/2026-04-27-daemon-phase2-local-state.md](./2026/2026-04-27-daemon-phase2-local-state.md) - daemon phase-2 local state/watch delivery archive.
+- [2026/2026-04-28-daemon-3a-3d.md](./2026/2026-04-28-daemon-3a-3d.md) - full 3A-3D daemon/reconciler evolution archive.
