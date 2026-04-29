@@ -14,3 +14,4 @@
 - [2026-04-22 setaria 数据采集](./2026/2026-04-22-setaria-metrics.md)
 - [2026/2026-04-27-daemon-phase2-local-state.md](./2026/2026-04-27-daemon-phase2-local-state.md) - daemon phase-2 local state/watch delivery archive.
 - [2026/2026-04-28-daemon-3a-3d.md](./2026/2026-04-28-daemon-3a-3d.md) - full 3A-3D daemon/reconciler evolution archive.
+- [2026/2026-04-28-go-runtime-cutover.md](./2026/2026-04-28-go-runtime-cutover.md) - Go runtime cutover delivery archive across daemon, JS reconciler, manifests, and office validation.
