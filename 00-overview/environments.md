@@ -53,7 +53,63 @@ LEXMOUNT_BASE_URL=https://apitest.local.lexmount.net
 
 ### 本机访问能力
 
-当前机器上可直接使用 `kubectl` 连接 `office` 测试环境。
+当前机器上可直接使用 `kubectl` 连接两个 office K8s 集群：
+
+1. `office-nanjing`：原 office 集群，用于模拟南京
+2. `office-beijing`：新 office 集群，用于模拟北京
+
+当前 kubeconfig 位置：
+
+```text
+~/.kube/config
+```
+
+单集群备份文件：
+
+```text
+~/.kube/configs/office-nanjing.yaml
+~/.kube/configs/office-beijing.yaml
+```
+
+当前 context 信息：
+
+| context | 用途 | API server |
+| --- | --- | --- |
+| `office-nanjing` | 原 office，模拟南京 | `https://10.3.3.176:6443` |
+| `office-beijing` | 新 office，模拟北京 | `https://10.3.217.198:6443` |
+
+查看所有 context：
+
+```bash
+kubectl config get-contexts
+```
+
+查看当前默认 context：
+
+```bash
+kubectl config current-context
+```
+
+切换默认 context：
+
+```bash
+kubectl config use-context office-nanjing
+kubectl config use-context office-beijing
+```
+
+更推荐在操作时显式指定 context，避免误操作到另一个集群：
+
+```bash
+kubectl --context office-nanjing get pods -A
+kubectl --context office-beijing get pods -A
+```
+
+验证两个集群节点：
+
+```bash
+kubectl --context office-nanjing get nodes -o wide
+kubectl --context office-beijing get nodes -o wide
+```
 
 这意味着以下工作通常可以直接在本机完成：
 
