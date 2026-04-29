@@ -680,7 +680,706 @@ WS 失败示例：
 
 建议 HTTP 和 WS 失败分开记分，不要混成一个桶。
 
-## 9. 最小日志口径
+## 9. 跨 Region 共享数据与统一管理面
+
+如果后续从南京扩到北京，不能只讨论 SDK 选路，还要把“全局管理数据”和“区域运行态数据”拆开。
+
+这里建议采用一条核心原则：
+
+- 南京保留统一管理面
+- 北京只承载本 region 的运行面
+- 两地不共享一套在线 PG
+
+换句话说：
+
+- `lexhome` 可以先只部署在南京
+- 北京集群有自己独立的 Kong / browser-manager / k8s-chrome-daemon / PG
+- 南京 `lexhome` 通过 session gateway 动态查询区域 API 看到北京 session，而不是直接读北京本地业务库
+
+### 9.1 数据类型拆分
+
+这件事里至少有三类数据，不能混成一套同步模型。
+
+#### 全局身份与授权数据
+
+包括：
+
+- user
+- project
+- api_key
+- project 与 api_key 的绑定关系
+- project 的 region 权限
+
+这类数据应该有一个全局真值来源。
+
+第一版建议：
+
+- 南京作为全局管理面主站
+- `project_id / api_key` 在南京创建和维护
+- 同一对 `project_id / api_key` 在所有被授权的 public regions 内都应该可用
+- 每个 public region 只消费同步后的授权快照
+
+这里的产品语义要明确：
+
+- 用户只维护一套 `project_id / api_key`
+- SDK 通过 `region` 决定在哪个地域创建实例
+- 不同 region 不能各自生成一套割裂的 project / key
+- 但 context / download / extension 不属于全局授权数据，不能跟着 project / key 跨 region 共享
+
+#### 区域运行态数据
+
+包括：
+
+- session
+- browser instance
+- pod / node / region 归属
+- session 状态
+- session close / reconnect / heartbeat
+- context
+- download
+- extension
+
+这类数据应该由创建它的 region 负责。
+
+如果 SDK 选择了北京：
+
+- session 创建发生在北京 Kong
+- browser-manager 在北京
+- k8s-chrome-daemon 在北京
+- 浏览器实例在北京 K8s 集群内
+- 这个 session 的权威运行态也属于北京
+
+这里需要明确一条边界：
+
+- context / download / extension 不能跨 region 共享
+- 北京创建的 context 只属于北京
+- 北京 session 产生的 download 只属于北京
+- 北京上传的 extension 只属于北京
+- 南京同名 context / extension 和北京同名 context / extension 也应视为不同 region 资源
+
+原因是这些数据通常依赖 region 内的对象存储、文件系统、browser-manager 元数据或实例运行态。
+
+如果把它们跨 region 共享，会引入：
+
+- 大文件跨地域复制
+- 生命周期和清理策略不一致
+- session 引用到不存在或未同步完成的资源
+- 用户以为同一个 `context_id / extension_id` 在所有 region 都可用
+
+#### 区域 Session 数据面
+
+南京 `lexhome` 需要看到北京 session，但不需要把北京 session 具体数据同步到南京。
+
+当前网站层已经通过 `BROWSER_BASE_URL` 直接访问 browser-manager 的 sessions 接口，例如：
+
+- `POST /instance/v2/sessions`
+- `POST /instance/stop`
+- `DELETE /instance`
+
+为了降低 `lexhome` 改造成本，建议在 `lexhome` 和各 region browser-manager 之间加一层 session gateway。
+
+session gateway 对 `lexhome` 继续暴露相同的 sessions 接口，但它的数据源不再是单个 browser-manager，而是多个 region 的 browser-manager。
+
+也就是说：
+
+- `lexhome` 仍然调用一个 `BROWSER_BASE_URL`
+- `BROWSER_BASE_URL` 从单 region browser-manager 切到南京 session gateway
+- session gateway 并发请求南京 browser-manager 和北京 browser-manager
+- session gateway 在服务端按 `region_id` 拼接、排序、分页或分组
+- session gateway 返回给 `lexhome` 的结构尽量保持和现有 `/instance/v2/sessions` 一致
+
+每个 region browser-manager 至少需要提供：
+
+- session list
+- session detail
+- close session
+- inspect / reconnect
+- region health
+
+这样 session 真值始终留在创建它的 region，南京只做统一网站入口和 session gateway 请求聚合，不保存北京 session 明细副本。
+
+### 9.2 Kong key 数据不能直接依赖跨 Region PG
+
+Kong 依赖 PG 存 consumer / credential / plugin / route 等数据。
+
+北京不能直接依赖南京 PG，原因是：
+
+1. 跨地域数据库延迟和故障面不可控
+2. 北京 region 故障隔离会被南京 PG 打穿
+3. Kong 的运行面不应该因为跨地域链路抖动而无法认证请求
+
+所以更合理的模型是：
+
+- 每个 region 的 Kong 都使用本 region 本地 PG
+- Kong 本地 PG 里的 key 数据不是全局真值
+- Kong 本地 PG 只保存同一套全局 project / api_key 数据同步后的 region 副本
+- Kong 的 route / service / plugin 配置由各 region 本地维护，不参与跨 region key 同步
+
+同步方式第一版建议不要做 PG 级双向复制。
+
+更推荐：
+
+- 南京管理面维护 project / api_key 真值
+- 通过同步任务或发布管道把同一个 project 对应的 consumer / key-auth credential 写入各 region Kong Admin API
+- region Kong 只负责本地认证和转发
+- route / service / plugin 仍然从各 region 自己的 Kong PG 读取
+
+也就是说：
+
+- 同步的是“key 相关授权对象”
+- 不是让多个 Kong 共用或互相复制一套 PG
+- 用户看到的是同一对 `project_id / api_key`，不是 region 私有凭证
+- 路由信息不跨 region 同步，避免把北京和南京的入口拓扑绑死在一起
+
+#### 当前 `lexhome` 与 Kong 在 key 上的交互
+
+当前 `lexhome` 不自己维护 API key 真值，而是作为 Kong Admin API 的管理 UI。
+
+现有调用链是：
+
+1. `lexhome` 服务端通过 `KONG_ADMIN_BASE_URL` 连接 Kong Admin API
+2. 用户进入 API key 页面时，`lexhome` 读取登录态里的 `user.id`
+3. `lexhome` 调用 `PUT /consumers/{user.id}`，请求体为 `{ username: user.id }`
+4. Kong 返回 consumer 对象，`lexhome` 把返回的 `consumer.id` 展示为 `project_id`
+5. `lexhome` 用 `GET /consumers/{consumer.id}/key-auth` 列出该 consumer 的 key
+6. 创建 key 时，`lexhome` 调用 `POST /consumers/{consumer.id}/key-auth`，由 Kong 生成 `api_key`
+7. 删除 key 时，`lexhome` 调用 `DELETE /consumers/{user.id}/key-auth/{keyAuthId}`
+
+运行时请求的校验链路是：
+
+1. SDK / 用户请求携带 `api_key` 和 `project_id`
+2. Kong `key-auth` 插件先用 `api_key` 解析出 consumer
+3. `projectid-consumer-check` 插件再读取请求里的 `project_id`
+4. 插件默认把 `project_id` 和 `consumer.id` 对比
+5. 因此当前语义下，`project_id` 实际上就是 Kong consumer id
+
+这个现状带来的多 region 结论是：
+
+- 当前 key 真值在 Kong PG 里，而不在 `lexhome` 自有业务库里
+- 南京创建出来的 consumer / key-auth credential 只存在南京 Kong PG
+- 北京如果使用独立 Kong PG，就必须额外写入同一份 consumer / key-auth credential
+- 多 region 第一版应把 key 管理从“直接操作单个 Kong”抽出来，变成南京管理面产生全局 key 变更，再同步到各 region Kong Admin API
+- 各 region Kong 只保存 key 相关授权副本，route / service / plugin 仍读取本 region 本地 PG
+
+这里的“同一份 key”指的是 key-auth credential 的 `key` 字段必须一致，不要求 Kong credential 自己的 `id` 一致。
+
+例如南京创建出来的是：
+
+- `project_id = consumer.id`
+- `api_key = abc123`
+- 南京 Kong key-auth credential id = `cred-nanjing-001`
+
+同步到北京时，目标语义应该是：
+
+- 北京 Kong 里能用同一个 `project_id`
+- 北京 Kong 里能用同一个 `api_key = abc123`
+- 北京 Kong 自己生成或保存的 credential id 可以是 `cred-beijing-999`
+
+不能在北京再调用一次空 body 的 `POST /consumers/{consumer.id}/key-auth` 让 Kong 自动生成新 key。
+
+否则北京会得到另一个 `api_key`，用户手里原来的南京 `api_key` 就不能在北京使用，和“一套 project_id / api_key 跨 region 可用”的目标冲突。
+
+所以同步器写北京 Kong 时，必须确认当前 Kong Admin API 支持写入指定 `key` 值；如果当前版本或配置不支持，就不能用 Kong 自动生成 key 的方式做跨 region 同步，需要改成由管理面生成 key，再分别写入各 region。
+
+还有一个需要顺手收口的代码边界：
+
+- 当前 `listApiKeys` / `createApiKey` 接收客户端传入的 `consumerId`，服务端只校验登录态，没有在 action 内强制校验该 `consumerId` 归属当前用户
+- 多 region 改造时应取消对客户端 `consumerId` 的信任，由服务端根据登录用户查全局 project，再决定允许操作哪些 key 和 region
+
+### 9.3 `project_id / api_key` 的推荐流向
+
+推荐流向如下：
+
+1. 用户在南京 `lexhome` 创建 project / api_key
+2. 南京管理面写入全局项目库
+3. 同步器把同一个 project 和同一个 api_key 对应的 Kong consumer / key-auth credential 分发到南京 Kong 和北京 Kong
+4. SDK 选择北京 region 后，使用同一组 `project_id / api_key` 访问北京 Kong
+5. 北京 Kong 用本地 PG 中的 key 副本完成认证，并用北京本地 PG 中的 route / service / plugin 完成路由
+6. 北京 browser-manager 创建 session，并把 session 数据保留在北京 region
+7. 南京 session gateway 按 region 动态查询南京和北京的数据面，再把结果返回给 `lexhome`
+
+这里的关键点是：
+
+- 用户只维护一套 `project_id / api_key`
+- 同一对 `project_id / api_key` 可以在不同 region 创建实例
+- 每个 region 都有本地可用的授权副本
+- region 内认证不依赖跨地域在线查询
+- region 内路由也不依赖南京 Kong 的配置
+
+### 9.4 授权同步器的状态模型
+
+为了让“同一对凭证跨 region 可用”可运维，授权同步器需要有明确状态。
+
+建议至少维护：
+
+- `project_id`
+- `api_key_id`
+- `target_region`
+- `sync_status`
+- `last_sync_at`
+- `last_error`
+- `credential_version`
+
+`sync_status` 可以先收敛成：
+
+- `pending`
+- `synced`
+- `failed`
+- `revoking`
+- `revoked`
+
+创建或轮换 api_key 时，建议流程是：
+
+1. 南京写入全局 project / api_key 真值
+2. 为每个目标 region 创建同步任务
+3. 同步器调用各 region Kong Admin API 写入 consumer / key-auth credential
+4. 每个 region 成功后标记 `synced`
+5. 只有目标 region 全部 `synced` 后，南京 `lexhome` 才显示该 key 在这些 region 可用
+
+这样用户仍然只看到一对 `project_id / api_key`，但后台能清楚知道它在每个 region 的分发状态。
+
+如果某个 region 同步失败：
+
+- 不应该影响已同步 region 的使用
+- `lexhome` 应展示该 region 暂不可用或同步失败
+- SDK 自动选路时不应把该 project 选到尚未同步成功的 region
+
+所以 public catalog 只告诉 SDK 哪些 region 存在还不够，最终还需要结合 project 的 region 授权状态。
+
+### 9.5 session 数据如何被南京 `lexhome` 展示
+
+南京 `lexhome` 想看到北京 session，不应该把北京 session 明细同步到南京，也不应该直接读北京 browser-manager 的内部库或本地 PG。
+
+建议引入南京 session gateway。
+
+它对上保持现有 browser-manager sessions 接口兼容，对下访问各 region browser-manager。
+
+对上接口：
+
+- `POST /instance/v2/sessions`
+- `POST /instance/stop`
+- `DELETE /instance`
+
+对下数据源：
+
+- 南京 browser-manager
+- 北京 browser-manager
+- 后续其他 public region browser-manager
+
+北京 region 至少需要提供给 session gateway：
+
+- `list sessions`
+- `get session`
+- `close session`
+- `inspect session`
+- `region health`
+
+南京 `lexhome` 的展示逻辑保持简单：
+
+1. 用户打开 session 页面
+2. `lexhome` 继续请求 `BROWSER_BASE_URL /instance/v2/sessions`
+3. 南京 session gateway 根据用户 project 权限确定可查询的 regions
+4. session gateway 分别请求南京和北京 browser-manager
+5. 各 region 返回自己本地的 session 列表
+6. session gateway 按 `region_id` 拼接结果并返回给 `lexhome`
+
+这个模型里：
+
+- session 明细不从北京同步到南京
+- 南京不维护全局 session index
+- SDK / API 层按 `region` 字段直接访问对应 region 的运行面
+- `lexhome` 网站层通过 session gateway 获得多 region 聚合结果，尽量不感知各 region browser-manager 细节
+
+为了避免页面被慢 region 拖死，session gateway 查询各 region 时应做并发请求和超时控制。
+
+如果北京 region 查询失败：
+
+- 南京 session 仍然正常展示
+- 北京区域展示为暂不可用或查询失败
+- 不影响用户操作其他 region 的 session
+
+### 9.6 南京如何访问北京数据面
+
+南京访问北京 browser-manager 不能直接走公网裸奔，也不能直接访问北京 PG。
+
+推荐链路是：
+
+```text
+lexhome
+  -> nanjing session gateway
+  -> private network / VPN / 专线 / 云联网
+  -> beijing region data-plane gateway
+  -> beijing browser-manager
+```
+
+这里建议北京侧不要直接把 browser-manager 暴露给南京，而是在北京集群内放一个 region data-plane gateway。
+
+原因：
+
+- browser-manager 仍保持 region 内服务
+- 对外只暴露受控的 session 查询 / 管理 API
+- 鉴权、限流、审计、字段裁剪都放在 gateway 层
+- 后续北京内部 browser-manager 结构变化时，不影响南京 session gateway
+
+南京到北京至少需要三层约束：
+
+1. 网络连通：VPC 对等连接、VPN、专线或云联网，优先私网链路
+2. 服务认证：mTLS 或内部 service token，不能只靠 IP 白名单
+3. 权限校验：请求必须带 `project_id / region_id / session_id`，北京侧确认 session 属于该 project 和本 region
+
+第一版可以先简化成：
+
+- 北京暴露一个内网 HTTPS endpoint
+- 南京 session gateway 配置北京 endpoint
+- 请求带内部 service token
+- 北京 region data-plane gateway 校验 token 和 project/session 归属
+- 所有请求记录审计日志，包括 `project_id / region_id / operation / status`
+
+### 9.7 Region 数据面 API 边界
+
+北京提供给南京 `lexhome` 的不是数据库访问权限，而是一组稳定 API。
+
+推荐边界：
+
+- 只暴露查询和管理 session 所需字段
+- 不暴露 region 内部 PG 表结构
+- 不让南京直接访问北京 K8s API
+- 不让外部用户直接访问 browser-manager 管理接口
+- region API 必须带服务间认证
+- 请求里必须带 `project_id` 和 `region_id`
+
+region API 返回的 session 数据至少包含：
+
+- `session_id`
+- `project_id`
+- `region_id`
+- `status`
+- `created_at`
+- `updated_at`
+- `browser_type`
+- `inspect_url`
+- 必要的连接信息或可反查 token
+
+南京 session gateway 需要完成用户权限校验，然后用内部 service credential 调 region API。
+
+北京 region 收到南京调用后，还需要校验：
+
+- service credential 是否可信
+- `project_id` 是否允许查询
+- 请求目标是否属于本 region
+- 操作的 `session_id` 是否属于该 `project_id`
+
+### 9.8 管理操作如何路由到对应 Region
+
+展示只是第一步，用户还会在南京 `lexhome` 上做管理操作，例如：
+
+- close session
+- reconnect
+- inspect
+- view logs
+
+这些操作不能在南京本地处理掉，因为 session 真正归属北京。
+
+所以页面和接口都必须携带 `region_id`。
+
+当用户在南京 `lexhome` 关闭北京 session 时：
+
+1. 页面上的 session 已带 `region_id=beijing`
+2. 用户点击关闭
+3. 南京 `lexhome` 调用南京 session gateway 的兼容 stop 接口
+4. session gateway 根据 `region_id=beijing` 调用北京 region data-plane gateway
+5. 北京 data-plane gateway 调用北京 browser-manager 关闭实例
+6. 南京 `lexhome` 重新查询 sessions 接口并刷新页面展示
+
+这里南京做的是“管理面代理”，不是直接操作北京 K8s。
+
+这里还需要一条权限规则：
+
+- 南京管理面对 owner region 的管理调用，必须携带服务间认证
+
+不能让外部用户直接拿 `api_key` 调北京 browser-manager 管理接口。
+
+推荐做法：
+
+- 用户请求只到南京 `lexhome` / 管理 API
+- 南京完成用户权限校验
+- 南京 session gateway 用内部 service credential 调 owner region 管理 API
+- owner region 再校验该 service credential 和 `project_id / session_id / region_id` 是否匹配
+
+这样外部 API key 仍只用于用户侧 SDK 创建 session，不扩大成跨 region 管理凭证。
+
+### 9.9 Context / Download / Extension 的 Region 边界
+
+context / download / extension 不进入全局同步，也不应由南京统一保存北京副本。
+
+它们的归属规则是：
+
+- context 属于创建它的 region
+- extension 属于上传它的 region
+- download 属于产生它的 session 所在 region
+- session 创建时引用的 `context_id / extension_id` 必须和目标 `region_id` 一致
+
+如果 SDK 选择北京 region：
+
+- 只能使用北京已有的 context
+- 只能使用北京已上传的 extension
+- 下载产物保留在北京
+- 南京 `lexhome` 如需展示或下载，只能通过北京 region data-plane gateway 代理读取
+
+如果用户希望同一个 extension 在南京和北京都可用，第一版应要求用户分别上传到两个 region，或者后续再提供显式的“复制到其他 region”动作。
+
+这里不建议做隐式复制，原因是：
+
+- 上传文件可能很大
+- 复制状态会影响 session 创建成功率
+- 失败补偿和清理成本高
+- 用户很难判断某个 `extension_id / context_id` 到底在哪些 region 可用
+
+`lexhome` 展示这些资源时，也应带上 `region_id`。
+
+推荐 UI / API 语义：
+
+- context 列表按 region 查询和展示
+- extension 列表按 region 查询和展示
+- download 列表按 session 的 region 查询
+- 创建 session 时，只允许选择同 region 的 context / extension
+- 如果用户切换 region，context / extension 选择项也随 region 切换
+
+### 9.10 一致性模型
+
+这套设计不应该追求强一致全局数据库。
+
+建议明确成：
+
+- 授权数据：最终一致，但创建 / 轮换 api_key 时需要等待各 region 同步完成后再对外声明可用
+- session 展示：南京 session gateway 实时查询各 region 数据面，不做 session 明细同步
+- session 操作：按 `region_id` 路由到 owner region，操作结果以 owner region 返回为准
+- context / download / extension：region 内可见，不做跨 region 共享
+- region 运行态：region 内强一致，跨 region 不做强一致
+
+如果北京到南京的链路短暂不可用：
+
+- 北京 region 已同步过的 api_key 仍可继续创建 session
+- 北京本地 session 运行不应受影响
+- 南京 `lexhome` 暂时查询不到北京 session
+- 南京 `lexhome` 应把北京 region 标记为查询失败或暂不可用
+- 链路恢复后，南京 `lexhome` 下一次查询即可看到北京当前状态
+
+### 9.11 推荐的第一版架构
+
+第一版推荐这样做：
+
+1. 南京保留唯一 `lexhome`
+2. 南京维护全局 project / api_key 真值
+3. 南京到各 region 只同步 Kong key 相关数据
+4. 每个 region 保留本地 Kong PG
+5. 每个 region 的 route / service / plugin 配置由本地 Kong PG 管理
+6. 每个 region 独立运行 browser-manager / k8s-chrome-daemon / K8s 集群
+7. 南京增加 session gateway，对 `lexhome` 保持现有 sessions 接口兼容
+8. 每个 region 提供 session 查询和管理数据面 API
+9. 南京 session gateway 动态查询各 region 数据面并拼接
+10. 管理操作按 `region_id` 代理到 owner region
+11. context / download / extension 只在所属 region 内查询和使用
+
+这套模型里，“共享数据”不是共享所有数据库，而是共享两类经过治理的数据：
+
+- key 相关授权数据：从南京同步到各 region
+- session 查询 / 管理能力：由各 region 暴露 API 给南京 session gateway
+
+同时明确不共享：
+
+- context
+- download
+- extension
+
+### 9.12 落地阶段拆分
+
+建议不要一次性做完整多 region 平台，可以拆成多个阶段。
+
+#### 阶段一：region 注册与私网链路
+
+目标：
+
+- 先让南京能够识别并安全访问北京 region
+
+要做：
+
+- 定义内部 `region_id`、region 能力和服务端 endpoint 配置
+- 打通南京到北京的私网 / VPN / 专线访问链路
+- 北京侧提供 region data-plane gateway，不直接暴露 PG
+- 两地服务调用使用 mTLS 或内部 service token
+
+#### 阶段二：授权全局化
+
+目标：
+
+- 用户只维护一套 `project_id / api_key`
+- 南京和北京 Kong 都能认证同一对凭证
+
+要做：
+
+- 全局 project / api_key 真值表
+- Kong consumer / key-auth credential 同步器
+- 每个 region 的同步状态表
+- `lexhome` 展示 key 在各 region 的同步状态
+
+明确不做：
+
+- 不同步 route
+- 不同步 service
+- 不同步 plugin 配置
+
+#### 阶段三：region 数据面鉴权
+
+目标：
+
+- 南京访问北京数据面时有明确认证、鉴权和审计边界
+
+要做：
+
+- 南京调用北京时必须携带 service credential
+- 北京侧校验 `project_id / region_id / session_id` 归属
+- 所有跨 region 调用记录审计日志
+- 按 project 维护可用 region 和同步状态
+
+#### 阶段四：session 动态查询展示
+
+目标：
+
+- 南京 `lexhome` 能看到北京 session，但不把北京 session 明细同步到南京
+
+要做：
+
+- 南京增加 session gateway，并保持现有 sessions 接口兼容
+- 北京提供 session 查询数据面 API
+- session gateway 并发查询南京 / 北京 session 数据
+- session gateway 按 `region_id` 拼接展示数据
+- 查询失败时按 region 展示降级状态
+
+#### 阶段五：跨 region 管理操作
+
+目标：
+
+- 南京 `lexhome` 能关闭 / 查询 / 管理北京 session
+
+要做：
+
+- owner region 管理 API
+- 南京 session gateway 按 `region_id` 路由
+- 服务间认证
+- 操作后重新查询 owner region 刷新展示
+- 失败重试和错误展示
+
+#### 阶段六：region-scoped 资源展示
+
+目标：
+
+- context / download / extension 按 region 展示和使用
+
+要做：
+
+- context 列表增加 region 维度
+- extension 列表增加 region 维度
+- download 通过 session 所属 region 查询
+- 创建 session 时只能选择同 region 的 context / extension
+
+### 9.13 不建议的方案
+
+第一版不建议：
+
+- 让北京 Kong 直接连南京 PG
+- 两地 Kong PG 做双主复制
+- 南京 `lexhome` 直接查北京业务库
+- 把北京 session 明细同步到南京
+- 跨 region 共享 context / download / extension
+- session 运行态在两地互相写
+- SDK 选择北京后，控制面请求又回南京创建实例
+
+这些方案都会让 region 隔离失效，或者让故障面跨地域扩散。
+
+### 9.14 跨 Region 监控数据聚合
+
+北京 Prometheus 采集到的数据，需要能被南京 Grafana 读取。
+
+这属于观测面聚合，不应该和业务数据同步、Kong key 同步混在一起。
+
+推荐模型是：
+
+- 每个 region 保留本地 Prometheus
+- 每个 region 的 Prometheus 只负责 scrape 本 region 内的服务和节点
+- 南京 Grafana 作为统一观测入口
+- 南京 Grafana 通过数据源读取南京 Prometheus 和北京 Prometheus
+- 指标必须带 `region_id` label，避免 dashboard 聚合时混淆来源
+
+第一版可以选择两种落地方式。
+
+#### 方式一：南京 Grafana 直连北京 Prometheus
+
+链路：
+
+1. 北京 Prometheus 在北京集群内部采集指标
+2. 北京暴露一个只读 Prometheus query endpoint
+3. 南京 Grafana 增加北京 Prometheus datasource
+4. dashboard 查询时按 datasource 或 `region_id` 区分北京 / 南京
+
+优点：
+
+- 实现最快
+- 不需要引入新的指标存储组件
+- 各 region Prometheus 仍然独立
+
+约束：
+
+- 北京 Prometheus query endpoint 必须只对南京 Grafana 或南京内网开放
+- 需要服务间认证或网络白名单
+- 北京到南京链路断开时，南京 Grafana 无法实时查看北京指标，但北京本地采集不受影响
+
+#### 方式二：Prometheus remote_write 到南京长期指标库
+
+链路：
+
+1. 北京 Prometheus 本地 scrape
+2. 北京 Prometheus 通过 `remote_write` 把指标写到南京的集中式指标后端
+3. 南京 Grafana 读取集中式指标后端
+
+集中式指标后端可以是：
+
+- VictoriaMetrics
+- Thanos Receive
+- Mimir
+- 其他兼容 Prometheus remote_write / PromQL 的存储
+
+优点：
+
+- 南京 Grafana 查询路径稳定
+- 更适合长期存储和跨 region 聚合查询
+- 北京 Prometheus 短期不可达时，可以通过 remote_write 队列和重试做缓冲
+
+约束：
+
+- 需要额外维护集中式指标存储
+- 需要处理指标量、保留周期、租户隔离和写入鉴权
+
+#### 第一版建议
+
+第一版建议先用方式一：
+
+- 北京保留本地 Prometheus
+- 南京 Grafana 增加北京 Prometheus datasource
+- datasource 走内网专线 / VPN / 私网互通
+- query endpoint 做只读访问控制
+- 所有指标统一补 `region_id`
+
+后续如果需要跨 region 统一告警、长期存储、全局容量报表，再演进到方式二。
+
+这里的边界是：
+
+- Prometheus 指标可以跨 region 被南京 Grafana 读取
+- 但 Prometheus 不参与 session 查询 / 管理链路
+- Prometheus 不作为 `lexhome` session 列表的数据源
+- Prometheus 不替代各 region 的 session 数据面 API
+
+## 10. 最小日志口径
 
 默认至少应记录：
 
@@ -703,7 +1402,7 @@ WS 失败示例：
   - 每个 endpoint 的 probe 摘要
   - RTT 细节
 
-## 10. 第一版明确不做的事
+## 11. 第一版明确不做的事
 
 为了避免范围失控，第一版明确不做：
 
@@ -714,50 +1413,67 @@ WS 失败示例：
 - 不直接对外暴露 `qcloud / office` 这类内部环境名作为正式 `region`
 - 不在单个 session 生命周期中做跨 region 控制面漂移
 - 不让某个 region 的 `browser-manager` 去直接跨 region 调别的 `k8s-chrome-daemon`
+- 不让 region Kong 在线依赖其他地域的 PG
+- 不让 `lexhome` 直接跨地域读取 region 本地运行态数据库，只能通过 region 数据面 API 查询
 
-## 11. 当前任务拆分顺序
+## 12. 当前任务拆分顺序
 
 当前最合适的先后顺序已经收口：
 
 ### 第一优先级
 
-- `提供 SDK 可消费的 public endpoint catalog`
+- `定义全局 project / api_key 真值来源`
+- `实现 Kong key 相关授权数据向各 region 同步`
 
 原因：
 
-- 它是 SDK 自动选路的输入面
-- 如果这一层没定稳，SDK 只能继续硬编码或猜入口
+- 这是多 region 能否共用一套凭证的前提
+- 如果 key 不能跨 region 使用，SDK 选到北京也无法完成认证
 
 ### 第二优先级
 
-- `收口 public / internal / debug 暴露边界`
+- `实现各 region 的 session 查询 / 管理数据面 API`
+- `让 session gateway 动态查询各 region 并拼接`
 
 原因：
 
-- catalog 如果不和 scope 边界一起定，后面很容易把 `office` 或 internal/debug 入口混进去
+- 南京 `lexhome` 不保存北京 session 明细
+- 北京必须提供受控数据面，南京 session gateway 才能展示和操作北京 session
 
 ### 第三优先级
 
-- `收口多 region 控制面 bundle 与 region sticky 规则`
+- `让 lexhome 管理操作按 region_id 路由到 owner region`
 
 原因：
 
-- 如果 region 只停留在入口命名层，后续很容易出现跨 region 控制面串流
-- SDK 即使选对了入口，也无法保证 session 真正落在对应 region 的完整控制面内
+- close / inspect / reconnect 都必须由 session 所在 region 执行
+- 南京只做用户入口和管理面代理
 
-### 之后再开 SDK 侧 3 条
+### 第四优先级
 
+- `让南京 Grafana 读取北京 Prometheus`
+
+原因：
+
+- 这是观测面聚合，不影响 session 运行态
+- 第一版可以先通过 Grafana datasource 直连北京 Prometheus
+
+### 之后再开 SDK / catalog 侧
+
+- `提供 SDK 可消费的 public endpoint catalog`
+- `收口 public / internal / debug 暴露边界`
 - `落地就近接入统一配置语义与参数解析`
 - `实现自动选路主流程`
 - `实现缓存 / fallback / 最小日志口径`
 
-## 12. 一句话总结
+## 13. 一句话总结
 
-这件事的前提不是先写 SDK 选路代码，而是：
+这件事的前提不是先写 SDK 选路代码，而是先把多 region 管理面打通：
 
-- 先把服务端 `public endpoint catalog` 做出来
-- 再把 `public / internal / debug` 的边界定死
-- 再把多 region 下的控制面 bundle 和 region sticky 规则定死
-- 然后 SDK 再在稳定的 public 输入面上实现 `catalog -> filter -> probe -> select`
+- 先让一套 `project_id / api_key` 能在南京和北京 Kong 使用
+- 再让北京提供 session 查询 / 管理数据面给南京 `lexhome`
+- 再让南京 session gateway 动态查询和拼接各 region session，并对 `lexhome` 保持 sessions 接口兼容
+- 再补齐跨 region 观测入口
+- 最后 SDK 再基于稳定的 public catalog 实现 `catalog -> filter -> probe -> select`
 
-否则 SDK 仍然会被迫自己猜入口，`office` 也会持续存在被误混进正式默认路径的风险。
+否则 SDK 即使选到了北京，也会遇到凭证不可用、网站看不到 session、南京无法管理北京实例的问题。
