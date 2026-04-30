@@ -70,7 +70,7 @@ make push
 1. `code.lexmount.net/wangli/browser-operator:<tag>`
 2. `lexmount.tencentcloudcr.com/cloud/browser-operator:<tag>`
 
-如涉及香港环境，还需要同步 HK registry 对应 tag。
+如涉及香港环境，只需要在 manifest 中补齐 HK registry 对应 tag。HK registry 的实际镜像推送由 `@freelw` 执行，agent 不要自行推送。
 
 ## 第二步：更新 manifest 中的镜像
 
@@ -79,6 +79,8 @@ make push
 1. `lexmount-k8s-manifests/apps/clusters/office/images-configmap.yaml`
 2. `lexmount-k8s-manifests/apps/clusters/qcloud/images-configmap.yaml`
 3. `lexmount-k8s-manifests/apps/clusters/qcloud-hk/images-configmap.yaml`
+
+注意：更新 `qcloud-hk` 时必须保留 `lexmoun-tcr-hk.tencentcloudcr.com/...` 这类 HK registry 前缀，只替换 tag。不要把它改成 `lexmount.tencentcloudcr.com/...` 或 `code.lexmount.net/...`。
 
 核心字段：
 
