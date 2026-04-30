@@ -114,10 +114,48 @@ Daemon 收到刷新通知时：
 
 ## 多 Region 边界
 
-- timeout 配置可以按 `region_id` 生效
+- timeout 配置按目标 region 生效，但单个 region daemon 本地表不需要存 `region_id`
 - 南京 `lexhome` 是统一管理入口
 - 北京 daemon 只加载和执行北京 region 的 timeout 配置
 - 南京修改北京 region timeout 时，通过北京 region data-plane gateway 通知北京 daemon
+- 南京读取北京 timeout 配置时，也必须通过北京 region data-plane gateway，不直接访问北京 PG
+
+## 待办：跨 Region Timeout 数据面
+
+北京 `k8s-chrome-daemon` 的 timeout 数据读写需要纳入 region data-plane。
+
+目标：
+
+- 南京官网展示北京 timeout 配置时，通过北京 region data-plane gateway 读取
+- 南京官网修改北京 timeout 配置时，通过北京 region data-plane gateway 写入北京本地 PG
+- 写入成功后，由北京 region data-plane gateway 通知北京 daemon 刷新 timeout controller
+- 南京不直接访问北京 PG，也不让北京 daemon 读取南京 PG
+
+建议接口：
+
+```text
+GET /v1/session-timeout/configs?project_id=...
+POST /v1/session-timeout/configs
+DELETE /v1/session-timeout/configs
+POST /v1/session-timeout/refresh
+```
+
+调用链：
+
+```text
+nanjing lexhome
+  -> nanjing management/session gateway
+  -> beijing region data-plane gateway
+  -> beijing k8s-chrome-daemon internal timeout API
+  -> beijing local PG
+```
+
+约束：
+
+- API key 只能传 hash，不传明文
+- 跨 region 调用必须使用内部 service credential
+- gateway 需要记录审计日志：`project_id`、目标 `region_id`、操作类型、结果
+- 失败时南京官网只能展示“北京 region 配置更新失败 / 待重试”，不能假定已生效
 
 ## 明确不做
 

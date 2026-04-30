@@ -20,6 +20,8 @@
 - 北京侧校验 `project_id / region_id / session_id` 归属。
 - 所有跨 region 调用记录审计日志。
 - 按 project 维护可用 region 和同步状态。
+- 北京 daemon 的 session timeout 配置读写也走北京 region data-plane，不直接跨 region 访问 PG。
+- 南京官网修改北京 timeout 后，由北京 region data-plane 通知北京 daemon 刷新 timeout controller。
 
 ## 阶段四：Session 动态查询展示
 
