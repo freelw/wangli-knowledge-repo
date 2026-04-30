@@ -10,6 +10,7 @@
 - `setaria-monitoring.md`
 - `k8s-chrome-daemon-query-path.md`
 - `daemon-timeout-pg-plan.md`
+- `devtools-frontend-nginx/`
 
 建议阅读顺序：
 
@@ -23,3 +24,4 @@
 - [browser-manager-reconciler-3a-3d.md](./browser-manager-reconciler-3a-3d.md) - reconciler from metrics to watch-first validation and watch-event-triggered targeted reconcile.
 - [browser-manager-go-runtime-cutover.md](./browser-manager-go-runtime-cutover.md) - Go runtime cutover from JS reconciler to Go control plane, including housekeeping shrink and office validation.
 - [daemon-timeout-pg-plan.md](./daemon-timeout-pg-plan.md) - daemon no longer depends on PocketBase for session timeout; lexhome writes PG and notifies daemon timeout controller refresh.
+- [devtools-frontend-nginx/](./devtools-frontend-nginx/) - nginx image definition for serving a DevTools frontend artifact over HTTP.
