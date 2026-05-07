@@ -54,10 +54,22 @@
 
 ## 阶段八：Public 入口目录
 
-- 定义 public endpoint catalog，SDK 只消费 `scope=public` 的入口。
+- 定义 public endpoint catalog，SDK 从主 region 拉取可选入口目录。
 - 明确 `region_id` 命名，不把 `qcloud / office` 这类内部环境名暴露给正式 SDK。
 - 每个 public region 对应一个独立 K8s 集群和一个外部入口。
 - catalog 只描述可接入 region，不负责 region 内服务编排。
+
+落地方式：
+
+- `browser-manager` 暴露 `GET /v1/regions/catalog`，返回服务端配置的 public 入口目录。
+- `browser-manager` 暴露 `GET /v1/region/probe`，用于 SDK 对候选 region 做轻量探测。
+- 只有主 region 开启 catalog；从 region 不响应 catalog。
+- catalog 返回接入点 IP 数组和 host 域名，SDK 实际连接 `endpoint_ips` 中的 IP，并在 HTTP 请求头中带 `Host: <host>`；HTTPS 还要把 TLS SNI / serverName 设置为 `host`。
+- catalog 不返回 `priority`，SDK 自动选路按 probe 结果选择。
+- catalog 必须有且只有一个 `default=true` 的 region，SDK 未指定 region 时优先选择 default。
+- office 模拟环境中，office-nanjing 是主，catalog 返回 office-nanjing / office-beijing 两个接入点；office-beijing 不响应 catalog。
+- 当前不改 qcloud / qcloud-hk 配置；它们现在是两套隔离主环境，等后续 qcloud 拆成 qcloud-nanjing / qcloud-beijing 后再接入 catalog。
+- 正式环境第一版由主 region 返回正式入口目录；对外 `region_id` 使用产品语义名，例如 `cn-nanjing`、`hk`。
 
 ## 阶段九：SDK 选路能力
 

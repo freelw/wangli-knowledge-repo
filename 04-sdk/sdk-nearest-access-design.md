@@ -27,25 +27,23 @@ SDK 不选择的是：
 
 换句话说，SDK 处理的是“区域入口选择”，不是“基础设施调度”。
 
-### 2.2 正式默认可见范围
+### 2.2 正式默认入口目录
 
-正式 SDK 默认只消费：
-
-- `scope=public`
+正式 SDK 默认只消费主 region 提供的官方 catalog。
 
 不进入正式默认消费路径的包括：
 
-- `scope=internal`
-- `scope=debug`
 - `office`
+- 非主 region 的 catalog 接口
 
 这里的核心规则已经收口：
 
-- `office` 不进入默认 public catalog
+- 只有主 region 响应 catalog
+- 从 region 不响应 catalog
 - `office` 不参与正式自动选路
 - `office` 不混进正式 fallback 路径
 
-如果未来需要让内部调试用户访问 `office`，应该通过额外开关或单独入口控制，而不是把它混进正式默认流程。
+office 环境用于模拟南京 / 北京时，南京是主，负责返回 catalog；北京是从，只提供本 region 接入点和 probe，不提供 catalog。
 
 ## 3. 统一模型
 
@@ -136,11 +134,10 @@ SDK 不选择的是：
 服务端内部仍然可以保留 endpoint 概念，但对 SDK 而言当前可简化成：
 
 - `region_id`
+- `endpoint_ips`
+- `host`
 - `base_url`
 - `wss_prefix`
-- `scope`
-- `status`
-- `priority`
 
 结论：
 
@@ -153,7 +150,7 @@ SDK 不选择的是：
 
 - 当前有哪些 public regions 可以选
 - 每个 region 对应哪个正式入口
-- 哪些入口已经停用、draining，或者不该接新流量
+- 每个 region 对应的接入 IP 和域名
 
 第一阶段建议由服务端维护一份官方 catalog，SDK 只消费，不拥有真值来源。
 
@@ -167,17 +164,49 @@ SDK 不选择的是：
 
 - `region_id`
 - `display_name`
+- `default`
+- `endpoint_ips`
+- `host`
 - `base_url`
 - `wss_prefix`
-- `scope`
-- `status`
-- `priority`
 
-如果允许再加两个字段，建议补：
+如果允许再加字段，建议补：
 
-- `public_api`
 - `tags`
 - `probe_path`
+
+当前落地：
+
+- 由 `browser-manager` 提供 `GET /v1/regions/catalog`。
+- catalog 数据通过环境变量配置；只有主 region 开启 `REGION_CATALOG_ENABLED=true` 后才响应。
+- 从 region 不响应 catalog，避免每个 region 都维护一份入口目录。
+- office 模拟环境中，office-nanjing 是主，catalog 返回 office-nanjing / office-beijing 两个接入点；office-beijing 不响应 catalog。
+- 当前不改 qcloud / qcloud-hk 现有配置；它们现在是两套隔离主环境，后续拆成 qcloud-nanjing / qcloud-beijing 后再接入 catalog。
+- 正式环境中，主 region 返回正式可用接入点；对外 `region_id` 使用产品语义名，例如 `cn-nanjing`、`hk`，不使用 `qcloud / qcloud-hk / office-*`。
+- catalog 必须有且只有一个 `default=true` 的 region。SDK 未显式指定 region 时，优先选择 default region。
+- SDK 实际连接 `endpoint_ips` 中的 IP，HTTP 请求头使用 `Host: <host>`；HTTPS 场景下 TLS SNI / serverName 也必须设置为 `host`，否则证书校验和网关域名路由会有问题。
+- 同一个 region 可以配置多个 `endpoint_ips`；SDK 可以在同一 region 内对这些 IP 做 probe 和失败切换，但不能把它们当成不同 region。
+
+响应示例：
+
+```json
+{
+  "generated_at": "2026-05-07T00:00:00.000Z",
+  "regions": [
+    {
+      "region_id": "cn-nanjing",
+      "display_name": "China Mainland",
+      "default": true,
+      "endpoint_ips": ["203.0.113.10"],
+      "host": "api.lexmount.cn",
+      "base_url": "https://api.lexmount.cn",
+      "wss_prefix": "wss://api.lexmount.cn",
+      "tags": [],
+      "probe_path": "/v1/region/probe"
+    }
+  ]
+}
+```
 
 ### 4.2 probe / health 端点
 
@@ -190,45 +219,44 @@ probe 最低要求：
 
 最低字段建议：
 
-- `status`
 - `region_id`
-- `scope`
 - `timestamp`
 
-如果再补两项会更好：
+当前落地：
 
-- `public_api`
-- `accept_new_sessions`
+- 由每个 region 的 `browser-manager` 提供 `GET /v1/region/probe`。
+- probe 只表达当前入口所在 region 的状态，不做业务 session 创建，也不穿透到其他 region。
 
 这样 SDK 可以判断：
 
-- 入口是否真的属于正式 public 消费面
 - 当前是否还能接新流量
 
-### 4.3 scope 边界
+### 4.3 catalog 主从边界
 
-服务端需要明确收口：
+服务端需要明确收口 catalog 的归属：
 
-- `public`
-- `internal`
-- `debug`
+- 主 region 负责响应 catalog
+- 从 region 不响应 catalog
+- catalog 返回所有可选接入点
 
-这不是注释层面的说明，而是要真的落到 endpoint 元数据上。
+这不是注释层面的说明，而是要真的落到配置和 HTTP 行为上。
 
 否则会出现两个问题：
 
-1. SDK 只能自己猜哪些入口能用
-2. `office` 容易被混进正式默认自动选路
+1. SDK 可能从不同 region 拉到不一致 catalog
+2. 每个 region 都维护 catalog 会带来不必要的数据同步和发布风险
 
-这里建议再补一条发布规则：
+这里的发布规则是：
 
-- 只有 `scope=public` 的 endpoint 才允许进入对 SDK 开放的 catalog
+- 只有主 region 配置 `REGION_CATALOG_ENABLED=true`
+- 从 region 保持 `REGION_CATALOG_ENABLED=false`
+- 从 region 收到 catalog 请求时返回 404
 
 也就是说：
 
-- `internal` / `debug` 可以存在于服务端治理数据里
-- 但不应该出现在正式 SDK 默认拉取的 public catalog 里
-- `office` 如果要保留，也应通过独立开关或独立 catalog 暴露，而不是混进默认 public 视图
+- office-nanjing 可以返回 office-nanjing / office-beijing
+- office-beijing 不返回 catalog
+- 正式环境同理，由主 region 返回正式接入点清单
 
 ## 5. SDK 配置语义
 
@@ -561,8 +589,9 @@ SDK 拉取官方 public endpoint catalog。
 
 要求：
 
-- 默认只消费 `scope=public`
-- 不把 `office`、internal、debug 混进候选集
+- 从主 region 拉取 catalog
+- catalog 返回的是可选 region endpoint 清单
+- 从 region 不作为 catalog 真值来源
 
 ### 7.2 filter
 
@@ -591,7 +620,6 @@ SDK 拉取官方 public endpoint catalog。
 
 - 先看可用性
 - 再看 RTT
-- 再看 catalog priority
 
 ### 7.4 select
 
