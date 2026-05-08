@@ -4,5 +4,6 @@
 
 当前条目：
 
+- `2026-05-08-lexmount-e2e-tool.md`
 - `2026-04-17-sdk-session-fields.md`
 - `2026-04-22-setaria-metrics.md`
