@@ -64,8 +64,8 @@
 - `browser-manager` 暴露 `GET /v1/regions/catalog`，返回服务端配置的 public 入口目录。
 - `browser-manager` 暴露 `GET /v1/region/probe`，用于 SDK 对候选 region 做轻量探测。
 - 只有主 region 开启 catalog；从 region 不响应 catalog。
-- catalog 返回接入点 IP 数组和 host 域名，SDK 实际连接 `endpoint_ips` 中的 IP，并在 HTTP 请求头中带 `Host: <host>`；HTTPS 还要把 TLS SNI / serverName 设置为 `host`。
-- catalog 不返回 `priority`，SDK 自动选路按 probe 结果选择。
+- catalog 返回 host 域名，SDK 直接通过 `https://<host>` / `wss://<host>` 访问对应 region。
+- catalog 不返回 `priority`，SDK 不做测速选最快。
 - catalog 必须有且只有一个 `default=true` 的 region，SDK 未指定 region 时优先选择 default。
 - office 模拟环境中，office-nanjing 是主，catalog 返回 office-nanjing / office-beijing 两个接入点；office-beijing 不响应 catalog。
 - 当前不改 qcloud / qcloud-hk 配置；它们现在是两套隔离主环境，等后续 qcloud 拆成 qcloud-nanjing / qcloud-beijing 后再接入 catalog。
@@ -73,7 +73,8 @@
 
 ## 阶段九：SDK 选路能力
 
-- SDK 启动时拉取 catalog，按手动 region 或自动模式筛选候选入口。
-- 对候选入口做轻量 probe，选择最快可用 region。
-- 缓存测速结果，避免每次启动都测速。
-- 参数优先级固定为 `base_url > manual region > auto`。
+- 不做自动测速选最快，也不做测速结果缓存。
+- SDK 使用 `base_url` 作为 catalog base URL。
+- 如果用户显式传入 `region`，SDK 从 catalog 中选择该 region。
+- 如果用户未传入 `region`，SDK 使用 catalog 中唯一 `default=true` 的 region。
+- 如果 catalog / probe 不可用，SDK fallback 到原始 `base_url` 行为。
