@@ -109,18 +109,18 @@
 - office-beijing Prometheus `http://10.3.217.198:30926/prometheus/-/ready` 返回 Ready，`up` 查询成功。
 - dashboard-init 已注入 `Datasource` 变量，dashboard panel / target datasource 均指向 `$datasource`，可在 `prometheus` 和 `prometheus-office-beijing` 之间切换。
 
-当前阻塞：
+后续补验结果：
 
-- `demo-nodejs-backend` PR #139 `Use host-only public region catalog` 仍是 OPEN，尚未合入 `main`。
-- 当前 `demo-nodejs-backend/main` 和 office 部署的 browser-manager 镜像不包含 `/v1/regions/catalog`、`/v1/region/probe` 代码。
-- 因此 `https://apitest.local.lexmount.net/v1/regions/catalog`、`https://apitest.local.lexmount.net/v1/region/probe`、`https://apitest-beijing.local.lexmount.net/v1/region/probe` 当前均返回 404。
-- Python quickstart `catalog_info.py` 返回 `available=false status_code=404`。
-- `lexmount-e2e-tool` 的 `catalog-info` 只能验证 fallback，显示 `catalog available=false regions=0`。
-- `lexmount-e2e-tool` 的 `region-sdk-session` 失败，错误为 `catalog has no regions`。
-
-处理建议：
-
-1. 先合入并发布 `demo-nodejs-backend` PR #139。
-2. 基于合入后的 `main` 重新构建并发布 office browser-manager 镜像。
-3. 重新执行 catalog / probe、Python SDK、Node.js SDK、`lexmount-e2e-tool region-sdk-session` 验收。
+- `demo-nodejs-backend` PR #139 已合入 `main`。
+- 已构建并推送 office 镜像：
+  - `code.lexmount.net/wangli/browser-manager:728ed56-20260509-175016`
+  - `code.lexmount.net/wangli/kong-init:728ed56-20260509-175016`
+- office-nanjing / office-beijing 已部署上述镜像，browser-manager 和 kong-init rollout 成功。
+- `https://apitest.local.lexmount.net/v1/regions/catalog` 返回 office-nanjing / office-beijing 两个 region。
+- office-nanjing / office-beijing 的 `/v1/region/probe` 均返回各自 region。
+- office-beijing 的 `/v1/regions/catalog` 返回 `region_catalog_disabled`，符合“只有主 region 响应 catalog”的设计。
+- Python quickstart `catalog_info.py` 返回 `available=true status_code=200`。
+- Python SDK 指定 `office-nanjing`、`office-beijing` 创建 / list / close session 均通过。
+- `lexmount-e2e-tool` 的 `region-sdk-session` 通过，已在两个 catalog region 分别创建、查询并关闭 session。
+- manifests PR #412 记录本次 office browser-manager / kong-init 镜像 tag 更新。
 
