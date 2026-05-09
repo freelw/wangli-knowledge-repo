@@ -96,3 +96,31 @@
 - Python SDK / Node.js SDK 已支持显式 `region`、default region 和 catalog / probe 不可用时的 fallback。
 - 阶段九中的自动测速选最快、测速缓存不做。
 - qcloud / qcloud-hk 当前仍是两套隔离主环境，暂不接入 catalog；等后续 qcloud 拆成 qcloud-nanjing / qcloud-beijing 后再接入。
+## 2026-05-09 office 全链路验收状态
+
+已验证通过：
+
+- `lexmount-e2e-tool` 的 `session-list` 用例通过，能通过当前默认入口创建、查询和清理 session。
+- office-nanjing 的 `session-gateway`、`region-data-plane-gateway`、`session-quota`、`kong-key-sync`、`browser-manager` deployment 均为 `Available`。
+- office-beijing 的 `region-data-plane-gateway`、`browser-manager` deployment 均为 `Available`。
+- `kong-key-sync` 日志显示 `sync-all-projects` 分页同步成功，多个 project 已同步到 `office-beijing`。
+- `sync-all-kong-projects-backfill` Job manifest server-side dry-run 通过。
+- office-nanjing Grafana 已配置 `prometheus-office-beijing` datasource。
+- office-beijing Prometheus `http://10.3.217.198:30926/prometheus/-/ready` 返回 Ready，`up` 查询成功。
+- dashboard-init 已注入 `Datasource` 变量，dashboard panel / target datasource 均指向 `$datasource`，可在 `prometheus` 和 `prometheus-office-beijing` 之间切换。
+
+当前阻塞：
+
+- `demo-nodejs-backend` PR #139 `Use host-only public region catalog` 仍是 OPEN，尚未合入 `main`。
+- 当前 `demo-nodejs-backend/main` 和 office 部署的 browser-manager 镜像不包含 `/v1/regions/catalog`、`/v1/region/probe` 代码。
+- 因此 `https://apitest.local.lexmount.net/v1/regions/catalog`、`https://apitest.local.lexmount.net/v1/region/probe`、`https://apitest-beijing.local.lexmount.net/v1/region/probe` 当前均返回 404。
+- Python quickstart `catalog_info.py` 返回 `available=false status_code=404`。
+- `lexmount-e2e-tool` 的 `catalog-info` 只能验证 fallback，显示 `catalog available=false regions=0`。
+- `lexmount-e2e-tool` 的 `region-sdk-session` 失败，错误为 `catalog has no regions`。
+
+处理建议：
+
+1. 先合入并发布 `demo-nodejs-backend` PR #139。
+2. 基于合入后的 `main` 重新构建并发布 office browser-manager 镜像。
+3. 重新执行 catalog / probe、Python SDK、Node.js SDK、`lexmount-e2e-tool region-sdk-session` 验收。
+
