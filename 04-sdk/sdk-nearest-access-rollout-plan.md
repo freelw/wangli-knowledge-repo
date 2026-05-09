@@ -45,12 +45,24 @@
 - download 按产生它的 session 所在 region 查询。
 - 创建 session 时只能选择同 region 的 context / extension。
 
+当前状态：
+
+- SDK / API 创建 session 主链路已满足第一版边界：SDK 选定 region 后，请求进入该 region 的 Kong / browser-manager / daemon，session 和资源查询都发生在该 region 内。
+- 如果在北京创建 session 时传入北京不存在的 `context_id`，北京本地查询失败，session 创建失败，因此不会使用南京 context 创建北京 session。
+- 暂不单独推进阶段六后端改造；剩余工作主要是 `lexhome` 的 context / extension / download 展示和选择体验，后续和 `lexhome` region-aware UI 改造一起处理。
+
 ## 阶段七：跨 Region 监控聚合
 
 - 每个 region 保留本地 Prometheus，只采集本 region。
 - 南京 Grafana 作为统一观测入口。
 - 第一版由南京 Grafana 直连北京 Prometheus 只读 datasource。
 - 后续需要长期存储时，再演进到 remote_write + 集中式指标库。
+
+当前状态：
+
+- office 环境已完成第一版：office-beijing Prometheus 通过 NodePort 暴露只读访问，office-nanjing Grafana 增加 `prometheus-office-beijing` datasource。
+- `grafana-dashboard-init` 已支持 dashboard 顶部 `Datasource` 变量，现有 dashboard 可以在 `prometheus` 和 `prometheus-office-beijing` 之间切换。
+- office 使用 `node IP + NodePort` 仅用于模拟跨 region 私网访问；正式环境应替换为北京侧私网 LB / 固定 VIP / 内网域名。
 
 ## 阶段八：Public 入口目录
 
@@ -78,3 +90,9 @@
 - 如果用户显式传入 `region`，SDK 从 catalog 中选择该 region。
 - 如果用户未传入 `region`，SDK 使用 catalog 中唯一 `default=true` 的 region。
 - 如果 catalog / probe 不可用，SDK fallback 到原始 `base_url` 行为。
+
+当前状态：
+
+- Python SDK / Node.js SDK 已支持显式 `region`、default region 和 catalog / probe 不可用时的 fallback。
+- 阶段九中的自动测速选最快、测速缓存不做。
+- qcloud / qcloud-hk 当前仍是两套隔离主环境，暂不接入 catalog；等后续 qcloud 拆成 qcloud-nanjing / qcloud-beijing 后再接入。
