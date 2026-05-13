@@ -6,3 +6,4 @@
 
 - `2026-04-17-sdk-session-fields.md`
 - `2026-04-22-setaria-metrics.md`
+- `2026-05-09-dotcom-ip-verification.md`
