@@ -44,6 +44,25 @@ lexhome (qcloud-nanjing)
 
 其中，北京侧不应该成为 catalog 真值，也不应该提供 lexhome 聚合入口。
 
+
+### 2.3 两地网络打通
+
+qcloud-nanjing 和 qcloud-beijing 之间通过腾讯云云联网打通内网：
+
+- 云联网实例：`ccn-7elj6cvh`
+- 连接对象：两地 VPC
+- 用途：让南京和北京控制面服务通过内网地址互访，不经过公网业务入口
+
+当前跨 region 控制面访问使用内网 IP + NodePort：
+
+| 调用方向 | 目标服务 | 地址 | 用途 |
+| --- | --- | --- | --- |
+| 南京 -> 北京 | qcloud-beijing `region-data-plane-gateway` | `http://172.21.0.2:30924` | session 查询 / 管理操作、Kong key 写入北京 |
+| 北京 -> 南京 | qcloud-nanjing `region-data-plane-gateway` | `http://10.206.0.89:30924` | 北京 daemon 读取南京 timeout 真值 |
+| 北京 -> 南京 | qcloud-nanjing `session-quota` | `http://10.206.0.89:30925` | 北京创建 session 前申请全局并发租约 |
+
+这条链路服务于控制面和内部数据面，不是 SDK / 用户业务公网入口。SDK 仍通过各 region 的 Kong 入口访问：南京 `api.lexmount.cn`，北京 `api-beijing.lexmount.cn`。
+
 ## 3. 已落地能力
 
 ### 3.1 Public endpoint catalog
