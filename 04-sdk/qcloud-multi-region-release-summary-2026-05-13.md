@@ -50,7 +50,9 @@ lexhome (qcloud-nanjing)
 qcloud-nanjing 和 qcloud-beijing 之间通过腾讯云云联网打通内网：
 
 - 云联网实例：`ccn-7elj6cvh`
-- 连接对象：两地 VPC
+- 连接对象：
+  - qcloud-beijing：`default-vpc`
+  - qcloud-nanjing：`default-vpc`
 - 用途：让南京和北京控制面服务通过内网地址互访，不经过公网业务入口
 
 当前跨 region 控制面访问使用内网 IP + NodePort：
