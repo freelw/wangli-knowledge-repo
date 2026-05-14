@@ -118,6 +118,49 @@ make push
 
 因此，对这三类镜像的回填会在 `kubectl apply -k` 时生效。
 
+
+## Chrome 镜像配置变更注意事项
+
+`CHROME_IMAGE` 不只被 `browser-manager` 使用。
+
+当前 `browser-ws-gateway` 通过 `envFrom` 也会读取 `browser-manager-config`，并且 `/connection` 路径在握手阶段会直接调用 `createSession(project_id, api_key, 'normal', contextId)` 创建浏览器实例。
+
+因此，如果只更新了 `browser-manager-config.CHROME_IMAGE`，但没有重启 `browser-ws-gateway`，会出现：
+
+1. 普通 SDK session 已经使用新 Chrome 镜像
+2. e2e-tool 的 `connection` case 仍创建旧 Chrome 镜像
+3. Pod label / annotation 里看到旧的 `docker_image`
+
+典型现象：
+
+```text
+label docker_image=chrome-20260424-161313-a0934b9362-experimental
+container image=.../chrome:20260424-161313-a0934b9362-experimental
+```
+
+但 `browser-manager` 中看到的环境变量已经是新值。原因是 `/connection` 实际走的是 `browser-ws-gateway`。
+
+排查时必须同时检查：
+
+```bash
+kubectl -n system exec deploy/browser-manager -- printenv CHROME_IMAGE
+kubectl -n system exec deploy/browser-ws-gateway -- printenv CHROME_IMAGE
+```
+
+如果 `browser-ws-gateway` 仍是旧值，执行：
+
+```bash
+kubectl -n system rollout restart deploy/browser-ws-gateway
+kubectl -n system rollout status deploy/browser-ws-gateway
+```
+
+发布 Chrome 镜像配置时，建议至少重启：
+
+1. `browser-manager`
+2. `browser-ws-gateway`
+
+因为两者都会通过环境变量消费 `browser-manager-config`，Pod 不重启不会刷新环境变量。
+
 ## 第四步：发布到 office
 
 执行：
