@@ -8,3 +8,4 @@
 - `2026-04-22-setaria-metrics.md`
 - `2026-05-09-dotcom-ip-verification.md`
 - `2026-05-14-multi-region-phase2-session-gateway.md`
+- `2026-05-19-custom-image-id-and-bench.md`
