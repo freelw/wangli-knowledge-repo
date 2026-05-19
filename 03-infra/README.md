@@ -26,3 +26,4 @@
 - [daemon-timeout-pg-plan.md](./daemon-timeout-pg-plan.md) - daemon no longer depends on PocketBase for session timeout; lexhome writes PG and notifies daemon timeout controller refresh.
 - [devtools-frontend-nginx/](./devtools-frontend-nginx/) - nginx image definition for serving a DevTools frontend artifact over HTTP.
 - [dotcom-ip-verification-and-webfetch-routing.md](./dotcom-ip-verification-and-webfetch-routing.md) - Kong client IP forwarding, browser-manager geo blocking, ip2region service, and HK webfetch routes.
+- [qcloud-spot-capacity-controller.md](./qcloud-spot-capacity-controller.md) - 腾讯云竞价实例询价控制器设计、配置、选型、Web plan 页面和运行注意事项。
