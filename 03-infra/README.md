@@ -30,3 +30,4 @@
 - [watermark-node-scope-metrics-2026-05-21.md](./watermark-node-scope-metrics-2026-05-21.md) - watermark-monitor browser-ready all/non-spot node-scope metrics and Grafana legend updates.
 - [qcloud-spot-capacity-controller-page-adjustment-2026-05-21.md](./qcloud-spot-capacity-controller-page-adjustment-2026-05-21.md) - capacity-controller Web page current active instances list and plan instance record separation.
 - [kustomize-patch-compatibility.md](./kustomize-patch-compatibility.md) - Kustomize `patches` 兼容性注意事项：strategic merge patch 建议一文件一资源，避免旧版 `kubectl apply -k` 无法解析多文档 patch。
+- [browser-scheduling-spot-fallback-2026-05-21.md](./browser-scheduling-spot-fallback-2026-05-21.md) - BrowserInstance scheduling policy: browser-ready hard constraint with non-spot preference and spot fallback.
