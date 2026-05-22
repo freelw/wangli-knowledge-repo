@@ -31,3 +31,5 @@
 - [qcloud-spot-capacity-controller-page-adjustment-2026-05-21.md](./qcloud-spot-capacity-controller-page-adjustment-2026-05-21.md) - capacity-controller Web page current active instances list and plan instance record separation.
 - [kustomize-patch-compatibility.md](./kustomize-patch-compatibility.md) - Kustomize `patches` 兼容性注意事项：strategic merge patch 建议一文件一资源，避免旧版 `kubectl apply -k` 无法解析多文档 patch。
 - [browser-scheduling-spot-fallback-2026-05-21.md](./browser-scheduling-spot-fallback-2026-05-21.md) - BrowserInstance scheduling policy: browser-ready hard constraint with non-spot preference and spot fallback.
+- [qcloud-spot-controller-spot-node-browser-metrics-2026-05-21.md](./qcloud-spot-controller-spot-node-browser-metrics-2026-05-21.md) - qcloud-spot-capacity-controller 上报 spot 节点上的浏览器实例数量，并接入 Prometheus / Grafana。
+- [k8s-node-resource-buffer-todo-2026-05-22.md](./k8s-node-resource-buffer-todo-2026-05-22.md) - TODO: 通过 kubelet reserved/eviction 和 limit/request 策略保障 node 预留约 5% CPU / 内存。
