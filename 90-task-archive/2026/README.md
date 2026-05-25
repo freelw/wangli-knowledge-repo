@@ -9,3 +9,5 @@
 - `2026-05-09-dotcom-ip-verification.md`
 - `2026-05-14-multi-region-phase2-session-gateway.md`
 - `2026-05-19-custom-image-id-and-bench.md`
+- `2026-05-25-ace-window-size-injection.md`
+- `2026-05-25-k8s-node-resource-buffer-runbook.md`
