@@ -33,3 +33,4 @@
 - [browser-scheduling-spot-fallback-2026-05-21.md](./browser-scheduling-spot-fallback-2026-05-21.md) - BrowserInstance scheduling policy: browser-ready hard constraint with non-spot preference and spot fallback.
 - [qcloud-spot-controller-spot-node-browser-metrics-2026-05-21.md](./qcloud-spot-controller-spot-node-browser-metrics-2026-05-21.md) - qcloud-spot-capacity-controller 上报 spot 节点上的浏览器实例数量，并接入 Prometheus / Grafana。
 - [k8s-node-resource-buffer-todo-2026-05-22.md](./k8s-node-resource-buffer-todo-2026-05-22.md) - TODO: 通过 kubelet reserved/eviction 和 limit/request 策略保障 node 预留约 5% CPU / 内存。
+- [k8s-node-5-percent-resource-buffer-runbook-2026-05-25.md](./k8s-node-5-percent-resource-buffer-runbook-2026-05-25.md) - 操作手册：在线上 K8s 节点配置 kubelet reserved/eviction，给 node 预留约 5% CPU / 内存。
