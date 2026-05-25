@@ -13,3 +13,4 @@
 - `2026-05-25-k8s-node-resource-buffer-runbook.md`
 - `2026-05-25-replay-pod-cleanup.md`
 - `2026-05-25-image-tag-alignment.md`
+- `2026-05-25-spot-kubelet-config.md`
