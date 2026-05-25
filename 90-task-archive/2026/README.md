@@ -11,3 +11,5 @@
 - `2026-05-19-custom-image-id-and-bench.md`
 - `2026-05-25-ace-window-size-injection.md`
 - `2026-05-25-k8s-node-resource-buffer-runbook.md`
+- `2026-05-25-replay-pod-cleanup.md`
+- `2026-05-25-image-tag-alignment.md`
