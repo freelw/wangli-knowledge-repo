@@ -10,4 +10,5 @@
 - `office-runbook.md`
 - `incident-checklist.md`
 - `notion-codex-access.md`
+- `browser-morning-report-generation-example.md`
 - `tencent-cloud-cls-tccli-runbook.md`
