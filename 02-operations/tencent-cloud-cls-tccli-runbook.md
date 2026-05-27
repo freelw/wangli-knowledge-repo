@@ -224,6 +224,109 @@ tccli cls SearchLog \
   --UseNewAnalysis true
 ```
 
+## 案例：按 session_id 查询 Beijing session 生命线
+
+问题：
+
+```text
+session_1779868595819_9k1mtmy9k
+```
+
+目标：
+
+1. 确认 session 是否创建成功。
+2. 查是否有 downloads/list 404。
+3. 查是否被 stopall/delete。
+4. 查 lease 是否释放。
+
+查询范围：
+
+```text
+region: ap-beijing
+time: 最近 2 小时
+query: session_1779868595819_9k1mtmy9k
+```
+
+先查 `browser-manager`：
+
+```bash
+SESSION_ID='session_1779868595819_9k1mtmy9k'
+FROM=$(date -d '2 hours ago' +%s%3N)
+TO=$(date +%s%3N)
+
+tccli cls SearchLog \
+  --region ap-beijing \
+  --TopicId 57bdb34c-f1ad-4bc5-b362-250c7e5f4d48 \
+  --From "$FROM" \
+  --To "$TO" \
+  --QueryString "$SESSION_ID" \
+  --QuerySyntax 1 \
+  --Sort asc \
+  --Limit 100 \
+  --UseNewAnalysis true
+```
+
+如果需要排查完整链路，再按相关 topic 查询：
+
+```bash
+SESSION_ID='session_1779868595819_9k1mtmy9k'
+FROM=$(date -d '2 hours ago' +%s%3N)
+TO=$(date +%s%3N)
+
+for item in \
+  '57bdb34c-f1ad-4bc5-b362-250c7e5f4d48:browser-manager' \
+  'aa34388a-2038-430b-9273-b13e56a3e4c0:region-data-plane-gateway' \
+  'b191479a-6bf3-456c-9636-33600f71f54e:k8s-chrome-daemon' \
+  '454913da-70db-4072-b5b3-7ed8bb378cbd:kong-access-log' \
+  '0160b4bb-2a34-41d1-a65d-f424ed1da010:browser-ws-gateway'
+do
+  topic_id=${item%%:*}
+  topic_name=${item#*:}
+  echo "==== ${topic_name}"
+
+  tccli cls SearchLog \
+    --region ap-beijing \
+    --TopicId "$topic_id" \
+    --From "$FROM" \
+    --To "$TO" \
+    --QueryString "$SESSION_ID" \
+    --QuerySyntax 1 \
+    --Sort asc \
+    --Limit 100 \
+    --UseNewAnalysis true \
+    | jq -r '.Results[]?.LogJson'
+done
+```
+
+这次实际命中的关键日志：
+
+```text
+15:56:35 browser-manager session-quota acquire
+15:56:35 browser-manager session-create reserved
+15:56:35 browser-manager finalize-start
+15:56:37 browser-operator creating-session-reconcile-runner pending
+15:56:38 browser-manager daemon-start success，elapsed_ms=2760
+15:56:38 browser-manager assert-instance success
+15:56:38 browser-manager activate success
+15:56:38 browser-manager done success
+15:56:38 browser-manager instance-create-client-ip，route=v1，has_client_ip_header=false
+15:56:41 region-data-plane-gateway downloads/list 返回 404
+15:56:47 browser-manager deleteAllActiveSessions-killBrowserInstance
+15:56:47 browser-manager docker-deleteContainer
+15:56:47 browser-operator server-ModifyHandler
+15:56:47-15:56:48 browser-operator Recorded pod exit code，exit_code=0
+15:56:48 browser-manager db-closeSession，reason=deleteAllActiveSessions
+15:56:48 browser-manager session-quota release，released=true，reason=deleteAllActiveSessions
+```
+
+结论：
+
+1. session 创建成功，daemon 启动耗时约 2760ms。
+2. `downloads/list` 的 404 发生在 session 生命周期早期，且早于 `deleteAllActiveSessions`。
+3. 这次没有看到创建失败，也没有看到 pod 非 0 退出。
+4. 后续 stopall/delete 路径正常执行，lease 已释放。
+5. 如果业务期望是“没有下载记录时返回空列表”，则该 404 应继续按 downloads API 语义问题排查。
+
 ## 注意事项
 
 1. `--region` 必须和 CLS topic 所在地域一致。
