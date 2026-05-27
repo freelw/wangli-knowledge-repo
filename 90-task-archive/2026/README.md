@@ -14,3 +14,4 @@
 - `2026-05-25-replay-pod-cleanup.md`
 - `2026-05-25-image-tag-alignment.md`
 - `2026-05-25-spot-kubelet-config.md`
+- `2026-05-27-tencent-cloud-cls-tccli-access.md`
