@@ -9,3 +9,4 @@
 - `release-browser-operator.md`
 - `office-runbook.md`
 - `incident-checklist.md`
+- `notion-codex-access.md`
