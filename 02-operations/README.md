@@ -10,3 +10,4 @@
 - `office-runbook.md`
 - `incident-checklist.md`
 - `notion-codex-access.md`
+- `tencent-cloud-cls-tccli-runbook.md`
