@@ -11,4 +11,5 @@
 - `incident-checklist.md`
 - `notion-codex-access.md`
 - `browser-morning-report-generation-example.md`
+- `browser-weekly-special-topic-followup.md`
 - `tencent-cloud-cls-tccli-runbook.md`
