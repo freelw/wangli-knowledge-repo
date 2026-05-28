@@ -17,3 +17,6 @@
 - `2026-05-27-tencent-cloud-cls-tccli-access.md`
 - `2026-05-27-api-key-redaction.md`
 - `2026-05-27-browser-morning-report-trial.md`
+
+- `2026-05-28-browser-kernel-weekly-followup.md`
+- `2026-05-28-browser-cloud-weekly-followup.md`
