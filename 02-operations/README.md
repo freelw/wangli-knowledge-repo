@@ -13,3 +13,4 @@
 - `browser-morning-report-generation-example.md`
 - `browser-weekly-special-topic-followup.md`
 - `tencent-cloud-cls-tccli-runbook.md`
+- `session-debug-cls-tool.md`
