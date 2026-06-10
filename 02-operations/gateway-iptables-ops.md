@@ -31,6 +31,12 @@ The goal is to forward VPN client traffic sent to gateway port `443` to each env
 - Forward target: `172.19.0.9:31443`
 - Verify host: `ops.lexmount.com`
 
+Additional qcloud-hk forwarding entry:
+
+- Gateway VIP: `10.20.0.3`
+- Forward target: `172.19.0.7:30443`
+- Rule purpose: forward traffic sent to `10.20.0.3:443` to `172.19.0.7:30443`.
+
 ## Forwarding Model
 
 Each gateway uses four rules:
@@ -98,6 +104,19 @@ iptables -A FORWARD -s 172.19.0.9/32 -i eth0 -o wg0 -p tcp --sport 31443 \
 
 iptables -t nat -A POSTROUTING -d 172.19.0.9/32 -o eth0 -p tcp --dport 31443 \
   -j SNAT --to-source 172.19.0.6
+
+# Additional qcloud-hk entry: 10.20.0.3:443 -> 172.19.0.7:30443
+iptables -t nat -A PREROUTING -d 10.20.0.3/32 -i wg0 -p tcp --dport 443 \
+  -j DNAT --to-destination 172.19.0.7:30443
+
+iptables -A FORWARD -d 172.19.0.7/32 -i wg0 -o eth0 -p tcp --dport 30443 \
+  -j ACCEPT
+
+iptables -A FORWARD -s 172.19.0.7/32 -i eth0 -o wg0 -p tcp --sport 30443 \
+  -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+iptables -t nat -A POSTROUTING -d 172.19.0.7/32 -o eth0 -p tcp --dport 30443 \
+  -j SNAT --to-source 172.19.0.6
 ```
 
 ## Delete Temporary Rules
@@ -132,6 +151,19 @@ iptables -D FORWARD -s 172.19.0.9/32 -i eth0 -o wg0 -p tcp --sport 31443 \
 
 iptables -t nat -D POSTROUTING -d 172.19.0.9/32 -o eth0 -p tcp --dport 31443 \
   -j SNAT --to-source 172.19.0.6
+
+# Additional qcloud-hk entry: 10.20.0.3:443 -> 172.19.0.7:30443
+iptables -t nat -D PREROUTING -d 10.20.0.3/32 -i wg0 -p tcp --dport 443 \
+  -j DNAT --to-destination 172.19.0.7:30443
+
+iptables -D FORWARD -d 172.19.0.7/32 -i wg0 -o eth0 -p tcp --dport 30443 \
+  -j ACCEPT
+
+iptables -D FORWARD -s 172.19.0.7/32 -i eth0 -o wg0 -p tcp --sport 30443 \
+  -m state --state RELATED,ESTABLISHED -j ACCEPT
+
+iptables -t nat -D POSTROUTING -d 172.19.0.7/32 -o eth0 -p tcp --dport 30443 \
+  -j SNAT --to-source 172.19.0.6
 ```
 
 ## Persistence
@@ -143,6 +175,53 @@ Known backup file:
 - `/etc/rc.local.bak.codex-20260401`
 
 Use an idempotent block guarded by `iptables -C ... || iptables -A ...`.
+
+### Persist qcloud-hk additional entry
+
+Append the following block to `/etc/rc.local` on the qcloud-hk gateway (`10.20.0.2`).
+
+Place it before the final `exit 0` line if `exit 0` already exists.
+
+```bash
+# BEGIN codex-kong-internal-forward-10-20-0-3
+sysctl -w net.ipv4.ip_forward=1 >/dev/null
+iptables -t nat -C PREROUTING -d 10.20.0.3/32 -i wg0 -p tcp --dport 443 -j DNAT --to-destination 172.19.0.7:30443 2>/dev/null || \
+  iptables -t nat -A PREROUTING -d 10.20.0.3/32 -i wg0 -p tcp --dport 443 -j DNAT --to-destination 172.19.0.7:30443
+iptables -C FORWARD -d 172.19.0.7/32 -i wg0 -o eth0 -p tcp --dport 30443 -j ACCEPT 2>/dev/null || \
+  iptables -A FORWARD -d 172.19.0.7/32 -i wg0 -o eth0 -p tcp --dport 30443 -j ACCEPT
+iptables -C FORWARD -s 172.19.0.7/32 -i eth0 -o wg0 -p tcp --sport 30443 -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || \
+  iptables -A FORWARD -s 172.19.0.7/32 -i eth0 -o wg0 -p tcp --sport 30443 -m state --state RELATED,ESTABLISHED -j ACCEPT
+iptables -t nat -C POSTROUTING -d 172.19.0.7/32 -o eth0 -p tcp --dport 30443 -j SNAT --to-source 172.19.0.6 2>/dev/null || \
+  iptables -t nat -A POSTROUTING -d 172.19.0.7/32 -o eth0 -p tcp --dport 30443 -j SNAT --to-source 172.19.0.6
+# END codex-kong-internal-forward-10-20-0-3
+```
+
+Recommended edit flow:
+
+```bash
+ssh root@10.20.0.2
+cp /etc/rc.local /etc/rc.local.bak.$(date +%Y%m%d%H%M%S)
+vim /etc/rc.local
+chmod +x /etc/rc.local
+systemctl status rc-local || true
+```
+
+After editing, run the block once manually or reboot during a maintenance window, then verify:
+
+```bash
+iptables -t nat -S | grep '10.20.0.3\\|172.19.0.7'
+iptables -S | grep '172.19.0.7'
+curl -skI https://10.20.0.3/
+```
+
+Rollback persistence by removing the block between:
+
+```bash
+# BEGIN codex-kong-internal-forward-10-20-0-3
+# END codex-kong-internal-forward-10-20-0-3
+```
+
+Then delete the temporary rules in the `Delete Temporary Rules` section.
 
 ## Business Verification
 
@@ -168,6 +247,16 @@ Expected:
 - `HTTP/1.1 302 Found`
 - `Location: /grafana/login`
 
+### qcloud-hk additional entry
+
+The additional qcloud-hk entry forwards `10.20.0.3:443` to `172.19.0.7:30443`.
+
+```bash
+curl -skI https://10.20.0.3/
+```
+
+Expected result depends on the service exposed by `172.19.0.7:30443`; at minimum, the request should reach the target instead of timing out at the gateway.
+
 ## Troubleshooting
 
 ### Gateway port 443 is unreachable
@@ -190,6 +279,9 @@ nc -vz 10.206.0.23 31443
 
 # qcloud-hk
 nc -vz 172.19.0.9 31443
+
+# qcloud-hk additional entry
+nc -vz 172.19.0.7 30443
 ```
 
 ### Request returns 404
