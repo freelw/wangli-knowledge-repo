@@ -176,15 +176,48 @@ iptables -t nat -D POSTROUTING -d 172.19.0.7/32 -o eth0 -p tcp --dport 30443 \
 
 持久化规则必须使用 `iptables -C ... || iptables -A ...` 这种幂等写法，避免机器重启或重复执行后产生重复规则。
 
-### 持久化 qcloud-hk 新增入口
+### 持久化 qcloud
 
-在 qcloud-hk 网关 `10.20.0.2` 上，把下面的 block 写入 `/etc/rc.local`。
+在 qcloud 网关 `10.20.0.1` 上，把下面的 block 写入 `/etc/rc.local`。
 
 如果 `/etc/rc.local` 末尾已经有 `exit 0`，必须把这个 block 放在 `exit 0` 之前。
 
 ```bash
-# BEGIN codex-kong-internal-forward-10-20-0-3
+# BEGIN codex-kong-internal-forward
 sysctl -w net.ipv4.ip_forward=1 >/dev/null
+iptables -t nat -C PREROUTING -d 10.20.0.1/32 -i wg0 -p tcp --dport 443 -j DNAT --to-destination 10.206.0.23:31443 2>/dev/null || \
+  iptables -t nat -A PREROUTING -d 10.20.0.1/32 -i wg0 -p tcp --dport 443 -j DNAT --to-destination 10.206.0.23:31443
+iptables -C FORWARD -d 10.206.0.23/32 -i wg0 -o eth0 -p tcp --dport 31443 -j ACCEPT 2>/dev/null || \
+  iptables -A FORWARD -d 10.206.0.23/32 -i wg0 -o eth0 -p tcp --dport 31443 -j ACCEPT
+iptables -C FORWARD -s 10.206.0.23/32 -i eth0 -o wg0 -p tcp --sport 31443 -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || \
+  iptables -A FORWARD -s 10.206.0.23/32 -i eth0 -o wg0 -p tcp --sport 31443 -m state --state RELATED,ESTABLISHED -j ACCEPT
+iptables -t nat -C POSTROUTING -d 10.206.0.23/32 -o eth0 -p tcp --dport 31443 -j SNAT --to-source 10.206.0.79 2>/dev/null || \
+  iptables -t nat -A POSTROUTING -d 10.206.0.23/32 -o eth0 -p tcp --dport 31443 -j SNAT --to-source 10.206.0.79
+# END codex-kong-internal-forward
+```
+
+### 持久化 qcloud-hk
+
+在 qcloud-hk 网关 `10.20.0.2` 上，把下面的 block 写入 `/etc/rc.local`。
+
+这个 block 同时包含两个入口：
+
+- `10.20.0.2:443 -> 172.19.0.9:31443`
+- `10.20.0.3:443 -> 172.19.0.7:30443`
+
+如果 `/etc/rc.local` 末尾已经有 `exit 0`，必须把这个 block 放在 `exit 0` 之前。
+
+```bash
+# BEGIN codex-kong-internal-forward
+sysctl -w net.ipv4.ip_forward=1 >/dev/null
+iptables -t nat -C PREROUTING -d 10.20.0.2/32 -i wg0 -p tcp --dport 443 -j DNAT --to-destination 172.19.0.9:31443 2>/dev/null || \
+  iptables -t nat -A PREROUTING -d 10.20.0.2/32 -i wg0 -p tcp --dport 443 -j DNAT --to-destination 172.19.0.9:31443
+iptables -C FORWARD -d 172.19.0.9/32 -i wg0 -o eth0 -p tcp --dport 31443 -j ACCEPT 2>/dev/null || \
+  iptables -A FORWARD -d 172.19.0.9/32 -i wg0 -o eth0 -p tcp --dport 31443 -j ACCEPT
+iptables -C FORWARD -s 172.19.0.9/32 -i eth0 -o wg0 -p tcp --sport 31443 -m state --state RELATED,ESTABLISHED -j ACCEPT 2>/dev/null || \
+  iptables -A FORWARD -s 172.19.0.9/32 -i eth0 -o wg0 -p tcp --sport 31443 -m state --state RELATED,ESTABLISHED -j ACCEPT
+iptables -t nat -C POSTROUTING -d 172.19.0.9/32 -o eth0 -p tcp --dport 31443 -j SNAT --to-source 172.19.0.6 2>/dev/null || \
+  iptables -t nat -A POSTROUTING -d 172.19.0.9/32 -o eth0 -p tcp --dport 31443 -j SNAT --to-source 172.19.0.6
 iptables -t nat -C PREROUTING -d 10.20.0.3/32 -i wg0 -p tcp --dport 443 -j DNAT --to-destination 172.19.0.7:30443 2>/dev/null || \
   iptables -t nat -A PREROUTING -d 10.20.0.3/32 -i wg0 -p tcp --dport 443 -j DNAT --to-destination 172.19.0.7:30443
 iptables -C FORWARD -d 172.19.0.7/32 -i wg0 -o eth0 -p tcp --dport 30443 -j ACCEPT 2>/dev/null || \
@@ -193,12 +226,20 @@ iptables -C FORWARD -s 172.19.0.7/32 -i eth0 -o wg0 -p tcp --sport 30443 -m stat
   iptables -A FORWARD -s 172.19.0.7/32 -i eth0 -o wg0 -p tcp --sport 30443 -m state --state RELATED,ESTABLISHED -j ACCEPT
 iptables -t nat -C POSTROUTING -d 172.19.0.7/32 -o eth0 -p tcp --dport 30443 -j SNAT --to-source 172.19.0.6 2>/dev/null || \
   iptables -t nat -A POSTROUTING -d 172.19.0.7/32 -o eth0 -p tcp --dport 30443 -j SNAT --to-source 172.19.0.6
-# END codex-kong-internal-forward-10-20-0-3
+# END codex-kong-internal-forward
 ```
 
 推荐编辑流程：
 
 ```bash
+# qcloud
+ssh root@10.20.0.1
+cp /etc/rc.local /etc/rc.local.bak.$(date +%Y%m%d%H%M%S)
+vim /etc/rc.local
+chmod +x /etc/rc.local
+systemctl status rc-local || true
+
+# qcloud-hk
 ssh root@10.20.0.2
 cp /etc/rc.local /etc/rc.local.bak.$(date +%Y%m%d%H%M%S)
 vim /etc/rc.local
@@ -209,16 +250,23 @@ systemctl status rc-local || true
 编辑完成后，可以手动执行一次 block，或者在维护窗口重启机器后验证：
 
 ```bash
-iptables -t nat -S | grep '10.20.0.3\\|172.19.0.7'
-iptables -S | grep '172.19.0.7'
+# qcloud
+iptables -t nat -S | grep '10.20.0.1\|10.206.0.23'
+iptables -S | grep '10.206.0.23'
+curl -skI -H 'Host: ops.lexmount.cn' https://10.20.0.1/grafana/
+
+# qcloud-hk
+iptables -t nat -S | grep '10.20.0.2\|10.20.0.3\|172.19.0.9\|172.19.0.7'
+iptables -S | grep '172.19.0.9\|172.19.0.7'
+curl -skI -H 'Host: ops.lexmount.com' https://10.20.0.2/grafana/
 curl -skI https://10.20.0.3/
 ```
 
-持久化回滚方式：删除下面两个标记之间的 block：
+持久化回滚方式：从对应网关的 `/etc/rc.local` 删除下面两个标记之间的 block：
 
 ```bash
-# BEGIN codex-kong-internal-forward-10-20-0-3
-# END codex-kong-internal-forward-10-20-0-3
+# BEGIN codex-kong-internal-forward
+# END codex-kong-internal-forward
 ```
 
 然后执行“删除临时规则”章节中的删除命令。
