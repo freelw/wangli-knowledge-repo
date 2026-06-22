@@ -22,3 +22,4 @@
 - `2026-05-28-browser-cloud-weekly-followup.md`
 - `2026-06-01-api-key-hash-annotation-timeout.md`
 - `2026-06-01-capacity-scaling-migration.md`
+- `2026-06-18-global-structured-logging-handoff.md`
