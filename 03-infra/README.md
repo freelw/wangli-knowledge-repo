@@ -26,6 +26,7 @@
 - [daemon-timeout-pg-plan.md](./daemon-timeout-pg-plan.md) - daemon no longer depends on PocketBase for session timeout; lexhome writes PG and notifies daemon timeout controller refresh.
 - [devtools-frontend-nginx/](./devtools-frontend-nginx/) - nginx image definition for serving a DevTools frontend artifact over HTTP.
 - [dotcom-ip-verification-and-webfetch-routing.md](./dotcom-ip-verification-and-webfetch-routing.md) - Kong client IP forwarding, browser-manager geo blocking, ip2region service, and HK webfetch routes.
+- [setaria-report-usage-api.md](./setaria-report-usage-api.md) - SetariaGateway `/internal/setaria/report_usage` 内部用量上报接口文档。
 - [qcloud-spot-capacity-controller.md](./qcloud-spot-capacity-controller.md) - 腾讯云竞价实例询价控制器设计、配置、选型、Web plan 页面和运行注意事项。
 - [watermark-node-scope-metrics-2026-05-21.md](./watermark-node-scope-metrics-2026-05-21.md) - watermark-monitor browser-ready all/non-spot node-scope metrics and Grafana legend updates.
 - [qcloud-spot-capacity-controller-page-adjustment-2026-05-21.md](./qcloud-spot-capacity-controller-page-adjustment-2026-05-21.md) - capacity-controller Web page current active instances list and plan instance record separation.
