@@ -7,8 +7,9 @@
 1. `agent-access-landscape.md`
 2. `external-doc-mapping.md`
 3. `opencli-integration-assessment.md`
-4. `session-targets-and-inspect-url.md`
-5. `sdk-nearest-access-design.md`
+4. `browser-cli-handoff.md`
+5. `session-targets-and-inspect-url.md`
+6. `sdk-nearest-access-design.md`
 
 ## 当前已有文档
 
@@ -28,6 +29,15 @@
 1. `jackwener/opencli` 和 Lexmount 的接点在哪里
 2. 为什么当前只能写成“接入评估”
 3. 下一步应优先验证什么
+
+### `browser-cli-handoff.md`
+
+回答：
+
+1. `browser-cli` 从 `website-skills` 抽取出来后的职责边界
+2. CLI 命令面、环境变量、安装方式和 `uv` 开发流程
+3. 当前依赖 `lex-browser-runtime` / `website-skills@main` 的原因
+4. 后续维护、发布和安全注意事项
 
 ### `external-doc-mapping.md`
 
